@@ -1,0 +1,20 @@
+# Machine-specific discovery results and credentials
+.local/
+.env
+.env.*
+!.env.example
+credentials/
+secrets/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.dmp
+
+# Build output
+node_modules/
+dist/
+target/
+src-tauri/target/
+.DS_Store
+Thumbs.db

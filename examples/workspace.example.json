@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "installations": [
+    { "id": "mumu-local", "kind": "mumu", "managerPath": null },
+    { "id": "maa-local", "kind": "maa", "executablePath": null },
+    { "id": "m9a-local", "kind": "m9a", "executablePath": null }
+  ],
+  "devices": [
+    { "id": "mumu-arknights", "installationId": "mumu-local", "instanceIndex": null },
+    { "id": "mumu-reverse1999", "installationId": "mumu-local", "instanceIndex": null }
+  ],
+  "accounts": [
+    { "id": "arknights-example", "game": "arknights", "roleId": null, "server": null, "deviceId": "mumu-arknights", "toolInstallationId": "maa-local" },
+    { "id": "reverse1999-example", "game": "reverse1999", "roleId": null, "server": null, "deviceId": "mumu-reverse1999", "toolInstallationId": "m9a-local" },
+    { "id": "genshin-example", "game": "genshin", "roleId": null, "server": null, "launcherPath": null },
+    { "id": "starrail-example", "game": "starrail", "roleId": null, "server": null, "launcherPath": null },
+    { "id": "wuthering-waves-example", "game": "wuthering-waves", "roleId": null, "server": null, "launcherPath": null }
+  ]
+}

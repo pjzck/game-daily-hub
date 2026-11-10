@@ -1,0 +1,13 @@
+{
+  "name": "game-daily-hub",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Exploration for a Tauri desktop hub for game accounts, daily status and automation tools",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "node scripts/check-repository.mjs"
+  }
+}
