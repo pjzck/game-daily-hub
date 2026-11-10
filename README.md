@@ -45,6 +45,8 @@ pwsh -NoProfile -File scripts/Probe-Environment.ps1 -QueryMumu
 npm run check
 ```
 
+项目使用本地检查，不配置 GitHub Actions。
+
 ## 参与和开源范围
 
 欢迎围绕已列出的验证项提交 issue。报告问题时请使用脱敏配置，不要上传 Cookie、Token、账号数据库或完整本机探测报告。
