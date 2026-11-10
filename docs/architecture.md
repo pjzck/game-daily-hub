@@ -10,6 +10,8 @@
 - 持久化：SQLite；Cookie / Token 通过 Windows 安全存储访问。
 - 现有工具：优先通过独立进程接入；底层运行器按版本验证后再选择。
 
+构建环境可放在个人云主机，先验证 Linux 到 Windows MSVC 的交叉编译与 NSIS 打包；通过手动 SSH 调用，不配置 Actions。编译产物按目标平台分发，桌面后端仍随应用在用户电脑运行。云端构建与 Windows 本机调试、设备验收分别进行。
+
 ## 模块关系
 
 ```mermaid

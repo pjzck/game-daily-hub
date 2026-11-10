@@ -20,7 +20,7 @@
 
 ## 2. Tauri 基础应用
 
-- 准备 Rust / Windows 构建环境。
+- 优先验证个人 Linux 云主机上的 Rust / Windows 交叉构建环境，Windows 本机验收；若依赖不兼容，再评估 Windows 原生构建。
 - 建立 Tauri 2 + React + TypeScript 项目和 SQLite 数据模型。
 - 实现账号资料、五款游戏入口、安装选择、MuMu 实例关联。
 - 展示首个已验证的数据源及更新时间，提供人工待办。

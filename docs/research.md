@@ -88,3 +88,15 @@
 - Windows 原生构建依赖与安装包验证。
 
 下一步以一个模拟器和一个只读数据源做最小验证，再进入完整界面实现。上述未验证项不会在产品中标为已支持。
+
+## 补充：个人云主机构建（2026-11-11）
+
+已通过只读 SSH 检查个人 Linux x86_64 云主机，具备 Docker，当前资源可作为构建候选；机器地址、容量与连接信息仅记入本地文件。未安装 Rust 或修改云端服务。
+
+- Rust 按 target 编译产物，源码可移植不代表同一个可执行文件能在 Windows、Linux 和 macOS 通用。[Rust 平台说明](https://doc.rust-lang.org/rustc/platform-support.html)
+- Tauri 官方给出了 Linux / macOS 使用 `cargo-xwin`、Windows MSVC target、LLVM / LLD 和 NSIS 构建 Windows 安装包的路径，同时明确指出该路径比 Windows 原生构建限制更多、测试更少。MSI 安装包仍需 Windows 构建。[Tauri Windows 构建文档](https://v2.tauri.app/distribute/windows-installer/#build-windows-apps-on-linux-and-macos)
+- 建议先以隔离的构建环境验证最小 Windows 应用，采用手动 SSH 构建和下载产物，不使用 GitHub Actions。
+- 桌面程序和本地设备适配器继续在 Windows 运行。用户运行预编译安装包不需要安装 Rust；云端构建不能替代本机的 MuMu、MAA / M9A 与窗口交互验收。
+- 首版按 Windows 支持，其他系统的安装发现、凭据存储和工具调用仍需各自适配。
+
+尚未验证：云端工具链安装、完整编译耗时和内存峰值、Windows 产物运行及安装包。暂不将远程构建标记为已支持。
