@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import { CircleAlert, Link2, Pencil, Plus, Trash2, UserRound, X } from "lucide-react";
+import { CircleAlert, Link2, Pencil, Plus, ScanLine, Trash2, UserRound, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { dateTime, errorMessage, games, type Account, type Game, type Meter } from "./model";
+import { MiyousheQr } from "./MiyousheQr";
 
 export function GameMark({ game }: { game: Game }) {
   return <span className={"game-mark " + game} aria-hidden="true">{games[game].mark}</span>;
@@ -111,7 +112,7 @@ export function AccountDialog({ account, close, saved }: {
   close: () => void;
   saved: (accounts: Account[]) => void;
 }) {
-  const [mode, setMode] = useState<"miyoushe" | "manual">(account?.source ?? "miyoushe");
+  const [mode, setMode] = useState<"qr" | "miyoushe" | "manual">(account?.source === "manual" ? "manual" : "qr");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const role = account?.role;
@@ -164,12 +165,13 @@ export function AccountDialog({ account, close, saved }: {
   }
 
   return (
-    <Modal title={account ? (mode === "manual" ? "编辑账号" : "更新米游社连接") : "添加账号"} busy={busy} close={close}>
-      {!account && <div className="segments" aria-label="账号来源">
-        <button type="button" aria-pressed={mode === "miyoushe"} onClick={() => { setMode("miyoushe"); setError(""); }} disabled={busy}><Link2 size={16} /> 连接米游社</button>
-        <button type="button" aria-pressed={mode === "manual"} onClick={() => { setMode("manual"); setError(""); }} disabled={busy}><Pencil size={16} /> 手动录入</button>
+    <Modal title={account ? (account.source === "manual" ? "编辑账号" : "更新米游社连接") : "添加账号"} busy={busy} close={close}>
+      {account?.source !== "manual" && <div className="segments" aria-label="账号来源">
+        <button type="button" aria-pressed={mode === "qr"} onClick={() => { setMode("qr"); setError(""); }} disabled={busy}><ScanLine size={16} /> 米游社扫码</button>
+        <button type="button" aria-pressed={mode === "miyoushe"} onClick={() => { setMode("miyoushe"); setError(""); }} disabled={busy}><Link2 size={16} /> 导入 Cookie</button>
+        {!account && <button type="button" aria-pressed={mode === "manual"} onClick={() => { setMode("manual"); setError(""); }} disabled={busy}><Pencil size={16} /> 手动录入</button>}
       </div>}
-      <form onSubmit={submit} key={mode} aria-busy={busy}>
+      {mode === "qr" ? <MiyousheQr existingId={account?.id ?? null} setBusy={setBusy} saved={saved} /> : <form onSubmit={submit} key={mode} aria-busy={busy}>
         <fieldset disabled={busy}>
           {mode === "miyoushe" ? <>
             <p className="form-description">导入已有的米游社凭据，读取已绑定的原神和崩铁国服角色。凭据由 Windows 加密保存。</p>
@@ -201,7 +203,7 @@ export function AccountDialog({ account, close, saved }: {
             {busy ? (mode === "miyoushe" ? "正在读取角色…" : "正在保存…") : mode === "miyoushe" ? "读取并保存" : "保存账号"}
           </button>
         </div>
-      </form>
+      </form>}
     </Modal>
   );
 }

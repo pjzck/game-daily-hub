@@ -83,7 +83,7 @@ pub struct ManualInput {
     stamina: Option<Meter>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Credentials {
     pub secret: String,
@@ -100,7 +100,7 @@ struct Workspace {
 pub struct AccountStore {
     path: PathBuf,
     operation: Mutex<()>,
-    client: reqwest::Client,
+    pub(crate) client: reqwest::Client,
 }
 
 impl AccountStore {
@@ -249,9 +249,17 @@ pub async fn remove_account(
 
 #[tauri::command]
 pub async fn connect_accounts(
-    mut credentials: Credentials,
+    credentials: Credentials,
     existing_id: Option<Uuid>,
     store: State<'_, AccountStore>,
+) -> Result<Vec<Account>, String> {
+    connect(&store, credentials, existing_id).await
+}
+
+pub(crate) async fn connect(
+    store: &AccountStore,
+    mut credentials: Credentials,
+    existing_id: Option<Uuid>,
 ) -> Result<Vec<Account>, String> {
     credentials.secret = credentials.secret.trim().to_owned();
     credentials.device_id = credentials.device_id.trim().to_owned();
@@ -353,8 +361,21 @@ async fn apply_roles(
         account.issue = Some("本次未返回该角色，已保留上次数据。".into());
     }
     let profile_at = now();
+    let genshin_roles = roles
+        .iter()
+        .filter(|role| role.game == Game::Genshin)
+        .count();
+    let starrail_roles = roles
+        .iter()
+        .filter(|role| role.game == Game::Starrail)
+        .count();
     for role in roles {
-        let result = community::notes(client, credentials, &role).await;
+        let single_role = match role.game {
+            Game::Genshin => genshin_roles == 1,
+            Game::Starrail => starrail_roles == 1,
+            _ => false,
+        };
+        let result = community::notes(client, credentials, &role, single_role).await;
         let existing = workspace
             .accounts
             .iter_mut()
@@ -390,5 +411,48 @@ async fn apply_roles(
             }
             Err(error) => account.issue = Some(error),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "uses a local signed-in account and the live MiYouShe service"]
+    fn refresh_live_miyoushe_accounts() {
+        tauri::async_runtime::block_on(async {
+            let directory = std::env::var_os("GAME_DAILY_HUB_DATA_DIR")
+                .expect("set GAME_DAILY_HUB_DATA_DIR to the signed-in app's data directory");
+            let store = AccountStore::open(directory.into()).expect("create HTTP client");
+            let mut workspace = store.read().expect("read accounts");
+            let connections: Vec<_> = workspace.credentials.keys().copied().collect();
+            assert!(!connections.is_empty(), "no signed-in accounts");
+            let mut complete = true;
+            for connection in connections {
+                refresh_connection(&store.client, &mut workspace, connection)
+                    .await
+                    .expect("refresh connected roles");
+                for account in workspace
+                    .accounts
+                    .iter()
+                    .filter(|entry| entry.connection == Some(connection))
+                {
+                    let game = account.role.game;
+                    if let Some(issue) = &account.issue {
+                        println!("{game:?}: {issue}");
+                        complete = false;
+                    } else {
+                        let stamina = account
+                            .notes
+                            .as_ref()
+                            .and_then(|notes| notes.stamina.as_ref())
+                            .expect("returned stamina");
+                        println!("{game:?}: {}/{}", stamina.current, stamina.maximum);
+                    }
+                }
+            }
+            assert!(complete, "some real-time notes could not be refreshed");
+        });
     }
 }

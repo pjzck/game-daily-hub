@@ -3,6 +3,7 @@
 mod accounts;
 mod community;
 mod gacha;
+mod miyoushe_login;
 mod mumu;
 mod protected;
 
@@ -22,6 +23,7 @@ fn main() {
                 None => app.path().app_local_data_dir()?,
             };
             app.manage(gacha::GachaStore::new(&directory));
+            app.manage(miyoushe_login::QrLogin::default());
             app.manage(accounts::AccountStore::open(directory)?);
             Ok(())
         })
@@ -31,6 +33,10 @@ fn main() {
             accounts::remove_account,
             accounts::connect_accounts,
             accounts::refresh_accounts,
+            miyoushe_login::start_miyoushe_login,
+            miyoushe_login::poll_miyoushe_login,
+            miyoushe_login::finish_miyoushe_login,
+            miyoushe_login::cancel_miyoushe_login,
             mumu::list_mumu_instances,
             gacha::list_gacha,
             gacha::import_gacha,
