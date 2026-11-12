@@ -6,7 +6,7 @@
 
 可采用独立的 Tauri 管理端，加上工具执行、设备管理和社区数据三个适配层。最接近完整需求的 AUTO-MAS 使用 Electron + Vue + Python；最接近目标技术栈的 MXU 使用 Tauri + React + TypeScript，但服务于 MaaFramework PI V2 项目。先验证现有工具的最小接入路径，再实现自己的账号总览和状态管理。
 
-仓库目前没有可运行的 Tauri 应用。以下明确区分本机验证、源码核对和设计建议。
+本报告记录立项时的验证、源码核对和设计建议。当前原型功能见 [README](../README.md)。
 
 ## 已验证的本机能力
 

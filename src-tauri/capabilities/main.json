@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Local account and MuMu status commands",
+  "windows": ["main"],
+  "permissions": [
+    "allow-list-accounts",
+    "allow-save-manual-account",
+    "allow-remove-account",
+    "allow-connect-accounts",
+    "allow-refresh-accounts",
+    "allow-list-mumu-instances",
+    "allow-list-gacha",
+    "allow-import-gacha",
+    "allow-gacha-page"
+  ]
+}
