@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ChevronDown, ChevronUp, CircleAlert, Link2, Pencil, Plus, ScanLine, Sparkles, Star, Trash2, UserRound, X } from "lucide-react";
+import { ChevronDown, ChevronUp, CircleAlert, Link2, Pencil, Plus, ScanLine, Sparkles, Star, Trash2, Trophy, UserRound, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { dateTime, errorMessage, games, type Account, type Game, type Meter } from "./model";
 import { MiyousheQr } from "./MiyousheQr";
@@ -22,7 +22,7 @@ function ResourceMeter({ label, meter }: { label: string; meter: Meter | null })
   );
 }
 
-export function AccountCard({ account, busy, order, onFollow, onEdit, onRemove, onGacha }: {
+export function AccountCard({ account, busy, order, onFollow, onEdit, onRemove, onGacha, onBattle }: {
   account: Account;
   busy: boolean;
   order?: { earlier?: () => void; later?: () => void };
@@ -30,6 +30,7 @@ export function AccountCard({ account, busy, order, onFollow, onEdit, onRemove, 
   onEdit: () => void;
   onRemove: () => void;
   onGacha?: () => void;
+  onBattle?: () => void;
 }) {
   const { role, notes, issue } = account;
   const game = games[role.game];
@@ -60,9 +61,14 @@ export function AccountCard({ account, busy, order, onFollow, onEdit, onRemove, 
         ) : null}
       </div>
       {issue && <p className="card-issue"><CircleAlert size={15} />{issue}</p>}
-      {onGacha && <button type="button" className="text-button card-gacha" onClick={onGacha}>
-        <Sparkles size={15} />{role.game === "genshin" ? "祈愿记录" : "跃迁记录"}
-      </button>}
+      {(onGacha || onBattle) && <div className="card-links">
+        {onBattle && <button type="button" className="text-button" onClick={onBattle}>
+          <Trophy size={15} />战绩
+        </button>}
+        {onGacha && <button type="button" className="text-button" onClick={onGacha}>
+          <Sparkles size={15} />{role.game === "genshin" ? "祈愿记录" : "跃迁记录"}
+        </button>}
+      </div>}
       <div className="account-footer">
         <div className="small muted">
           <div>{manual ? "本地记录" : "米游社"} · 资料 {dateTime.format(account.profileAt * 1000)}</div>

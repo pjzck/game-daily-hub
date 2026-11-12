@@ -169,7 +169,21 @@ nav { display: grid; gap: 5px; }
 .account-heading { display: flex; gap: 11px; align-items: center; }
 .follow-button { flex: none; }
 .follow-button[aria-pressed="true"] { color: #93640b; }
-.card-gacha { display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; }
+.card-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 9px; }
+.card-links .text-button { display: inline-flex; align-items: center; gap: 5px; color: var(--primary); }
+.battle-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 0 0 12px; }
+.battle-toolbar .button { flex: none; }
+.battle-records { display: grid; gap: 14px; }
+.battle-mode { display: grid; gap: 8px; }
+.battle-mode .notice { margin: 0; }
+.battle-season { padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: #fafaff; }
+.battle-season summary { cursor: pointer; font-size: 13px; }
+.battle-season summary span { display: block; margin-top: 4px; }
+.battle-season > p, .battle-group { margin-top: 8px; }
+.battle-group h4 { margin: 0 0 5px; font-size: 12px; }
+.battle-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 8px; margin: 0; }
+.battle-metrics dt { color: var(--muted); font-size: 12px; }
+.battle-metrics dd { margin: 2px 0 0; font-weight: 650; font-size: 14px; }
 .account-identity { min-width: 0; flex: 1; }
 .account-identity h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .game-mark { display: grid; place-items: center; height: 43px; width: 43px; border-radius: 12px; font-size: 19px; font-weight: 700; flex: none; }

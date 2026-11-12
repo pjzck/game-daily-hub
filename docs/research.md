@@ -114,6 +114,6 @@
 | 崩铁混沌回忆、虚构叙事、末日幻影 | `hkrpg/api/challenge`、`challenge_story`、`challenge_boss` | 均返回安全验证 `10035` |
 | 崩铁异相仲裁 | `hkrpg/api/challenge_peak` | `0`，返回 `challenge_peak_records` 等字段 |
 
-成功响应确认了对应查询可用。后续显示战绩时还需区分玩法未解锁、当期无记录和查询失败，并按期次读取星数、层数或用时。探索度可按区域展示，待完成米游社要求的验证后复测。接口参考 [提瓦特指南](https://github.com/BTMuli/TeyvatGuide)、[原神探索度数据模型](https://github.com/seriaati/genshin.py/blob/master/genshin/models/genshin/chronicle/stats.py) 和 [崩铁战绩查询](https://github.com/seriaati/genshin.py/blob/master/genshin/client/components/chronicle/starrail.py)。
+账号卡片已接入幻想真境剧诗、幽境危战和异相仲裁。按需读取期次及成绩，分别显示玩法未解锁、该期无记录和查询失败。探索度可按区域展示，待完成米游社要求的验证后复测。接口参考 [提瓦特指南](https://github.com/BTMuli/TeyvatGuide)、[原神探索度数据模型](https://github.com/seriaati/genshin.py/blob/master/genshin/models/genshin/chronicle/stats.py) 和 [崩铁战绩查询](https://github.com/seriaati/genshin.py/blob/master/genshin/client/components/chronicle/starrail.py)。
 
 逐抽祈愿和跃迁记录需要单独的抽卡历史授权 `authkey`。原型已支持从卡片打开对应游戏与 UID 的 UIGF／SRGF 本地档案。在线增量同步可进一步验证用户提供的游戏记录链接，按 UID 校验并沿用现有去重逻辑。本轮只核对了接口和格式，未在线拉取逐抽记录。[抽卡接口](https://uigf.org/zh/mihoyo-api-collection/hoyolab/user/game_account_info.html) · [UIGF 标准](https://uigf.org/zh/standards/uigf.html)

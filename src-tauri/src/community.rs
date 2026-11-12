@@ -123,10 +123,10 @@ pub(crate) fn data(mut payload: Value) -> Result<Value, String> {
         return Err(match code {
             -111 | -100 | -101 | 10001 => "米游社登录已失效，请重新扫码。".into(),
             1034 | 5003 | 10035 | 10041 | -3101 | -3102 => {
-                format!("米游社要求安全验证（{code}），请在官方 App 检查登录和便笺。")
+                format!("米游社要求安全验证（{code}），请在官方 App 检查登录状态。")
             }
-            -10001 => "米游社未接受当前便笺请求（-10001），请检查登录状态。".into(),
-            10101 | 10102 => "请在米游社检查角色及实时便笺的展示设置。".into(),
+            -10001 => "米游社未接受当前请求（-10001），请检查登录状态。".into(),
+            10101 | 10102 => "请在米游社检查角色的数据展示设置。".into(),
             _ => format!("米游社返回查询失败（{code}），请检查登录状态与展示设置。"),
         });
     }
@@ -139,6 +139,33 @@ pub(crate) fn data(mut payload: Value) -> Result<Value, String> {
 
 async fn read_data(request: RequestBuilder) -> Result<Value, String> {
     data(response(request).await?)
+}
+
+pub(crate) async fn battle_data(
+    client: &Client,
+    credentials: &Credentials,
+    role: &Role,
+    path: &str,
+    params: &[(&str, &str)],
+) -> Result<Value, String> {
+    let mut query = vec![
+        ("role_id", role.uid.as_str()),
+        ("server", role.server.as_str()),
+    ];
+    query.extend_from_slice(params);
+    query.sort_unstable();
+    let signed_query = query
+        .iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join("&");
+    let url = format!("https://api-takumi-record.mihoyo.com/game_record/app/{path}");
+    read_data(authorized(
+        client.get(url).query(&query),
+        credentials,
+        &signed_query,
+    )?)
+    .await
 }
 
 pub(crate) fn text(value: &Value) -> Option<String> {

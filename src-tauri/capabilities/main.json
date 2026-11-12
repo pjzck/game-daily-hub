@@ -5,6 +5,7 @@
   "windows": ["main"],
   "permissions": [
     "allow-list-accounts",
+    "allow-get-battle-records",
     "allow-update-account-card",
     "allow-save-manual-account",
     "allow-remove-account",

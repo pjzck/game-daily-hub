@@ -3,6 +3,7 @@ import { ArrowUpDown, CircleAlert, LayoutGrid, Link2, Monitor, Plus, RefreshCw, 
 import { useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { AccountCard, AccountDialog, Modal, NoAccounts } from "./Accounts";
+import { BattleRecordsDialog } from "./BattleRecords";
 import { Devices } from "./Devices";
 import { Gacha, type GachaTarget } from "./Gacha";
 import { errorMessage, games, type Account, type Game } from "./model";
@@ -36,6 +37,7 @@ function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<Account | null>();
+  const [battleAccount, setBattleAccount] = useState<Account>();
   const [removing, setRemoving] = useState<Account>();
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState("");
@@ -164,17 +166,20 @@ function App() {
               const move = (neighbor: Account | undefined) => neighbor && (() => {
                 void updateCard(account.id, { type: "swap", otherId: neighbor.id });
               });
-              const hasGacha = account.role.uid && (account.role.game === "genshin" || account.role.game === "starrail");
+              const supportsGameRecords = account.role.uid && (account.role.game === "genshin" || account.role.game === "starrail");
               return <AccountCard key={account.id} account={account} busy={accountBusy}
                 order={arranging ? { earlier: move(displayed[index - 1]), later: move(displayed[index + 1]) } : undefined}
                 onFollow={() => { void updateCard(account.id, { type: "follow", followed: !account.followed }); }}
                 onEdit={() => setEditing(account)}
                 onRemove={() => { setRemoveError(""); setRemoving(account); }}
-                onGacha={hasGacha ? () => openGacha(account) : undefined} />;
+                onGacha={supportsGameRecords ? () => openGacha(account) : undefined}
+                onBattle={supportsGameRecords && account.source === "miyoushe" && account.connection
+                  ? () => setBattleAccount(account) : undefined} />;
             })}
           </section>}
       </>}
     </main>
+    {battleAccount && <BattleRecordsDialog key={battleAccount.id} account={battleAccount} close={() => setBattleAccount(undefined)} />}
     {editing !== undefined && <AccountDialog account={editing} close={() => setEditing(undefined)} saved={result => {
       setAccounts(result);
       setFilter("all");

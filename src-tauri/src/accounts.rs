@@ -1,4 +1,7 @@
-use crate::{community, protected};
+use crate::{
+    battle_records::{self, BattleRecords},
+    community, protected,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -114,6 +117,17 @@ struct Workspace {
     credentials: BTreeMap<Uuid, Vec<u8>>,
 }
 
+impl Workspace {
+    fn credentials_for(&self, connection: Uuid) -> Result<Credentials, String> {
+        let encrypted = self
+            .credentials
+            .get(&connection)
+            .ok_or("凭据缺失，请更新连接。")?;
+        serde_json::from_slice(&protected::transform(encrypted, false)?)
+            .map_err(|_| "凭据无法读取，请更新连接。".into())
+    }
+}
+
 pub struct AccountStore {
     path: PathBuf,
     operation: Mutex<()>,
@@ -175,6 +189,31 @@ pub fn now() -> u64 {
 pub async fn list_accounts(store: State<'_, AccountStore>) -> Result<Vec<Account>, String> {
     let _guard = store.operation.lock().await;
     Ok(store.read()?.accounts)
+}
+
+#[tauri::command]
+pub async fn get_battle_records(
+    id: Uuid,
+    store: State<'_, AccountStore>,
+) -> Result<BattleRecords, String> {
+    let (role, credentials) = {
+        let _guard = store.operation.lock().await;
+        battle_record_session(&store.read()?, id)?
+    };
+    battle_records::fetch(&store.client, &credentials, &role).await
+}
+
+fn battle_record_session(workspace: &Workspace, id: Uuid) -> Result<(Role, Credentials), String> {
+    let account = workspace
+        .accounts
+        .iter()
+        .find(|account| account.id == id)
+        .ok_or("找不到这张账号卡片。")?;
+    let connection = account
+        .connection
+        .filter(|_| account.source == Source::Miyoushe)
+        .ok_or("请先连接该角色的米游社账号。")?;
+    Ok((account.role.clone(), workspace.credentials_for(connection)?))
 }
 
 #[tauri::command]
@@ -386,12 +425,7 @@ async fn refresh_connection(
     workspace: &mut Workspace,
     connection: Uuid,
 ) -> Result<(), String> {
-    let encrypted = workspace
-        .credentials
-        .get(&connection)
-        .ok_or("凭据缺失，请更新连接。")?;
-    let credentials = serde_json::from_slice(&protected::transform(encrypted, false)?)
-        .map_err(|_| "凭据无法读取，请更新连接。")?;
+    let credentials = workspace.credentials_for(connection)?;
     let roles = community::roles(client, &credentials).await?;
     apply_roles(workspace, client, connection, &credentials, roles).await;
     Ok(())
@@ -470,6 +504,54 @@ async fn apply_roles(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    #[ignore = "uses a local signed-in account and the live MiYouShe service"]
+    fn fetch_live_battle_records() {
+        tauri::async_runtime::block_on(async {
+            let directory = std::env::var_os("GAME_DAILY_HUB_DATA_DIR")
+                .expect("set GAME_DAILY_HUB_DATA_DIR to the signed-in app's data directory");
+            let store = AccountStore::open(directory.into()).expect("create HTTP client");
+            let workspace = store.read().expect("read accounts");
+            for game in [Game::Genshin, Game::Starrail] {
+                let mut accounts = workspace
+                    .accounts
+                    .iter()
+                    .filter(|entry| entry.source == Source::Miyoushe && entry.role.game == game)
+                    .peekable();
+                assert!(accounts.peek().is_some(), "no linked {game:?} role");
+                for account in accounts {
+                    let (role, credentials) =
+                        battle_record_session(&workspace, account.id).expect("load signed-in role");
+                    let records = battle_records::fetch(&store.client, &credentials, &role)
+                        .await
+                        .expect("fetch battle records");
+                    let data = serde_json::to_value(records).unwrap();
+                    for mode in data["modes"].as_array().unwrap() {
+                        let status = mode["status"].as_str().unwrap();
+                        let periods = mode["seasons"].as_array().map_or(0, Vec::len);
+                        let summaries = mode["seasons"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .flat_map(|season| season["groups"].as_array().into_iter().flatten())
+                            .filter(|group| {
+                                group["hasRecord"] == true
+                                    && group["metrics"]
+                                        .as_array()
+                                        .is_some_and(|metrics| !metrics.is_empty())
+                            })
+                            .count();
+                        println!(
+                            "{}: {status}, {periods} periods, {summaries} summaries",
+                            mode["mode"]
+                        );
+                        assert_ne!(status, "error", "{}", mode["message"]);
+                    }
+                }
+            }
+        });
+    }
 
     #[test]
     fn legacy_cards_keep_follow_state_and_order_on_disk() {
