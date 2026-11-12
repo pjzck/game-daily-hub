@@ -5,9 +5,11 @@ import { EmptyState, GameMark } from "./Accounts";
 import { errorMessage, games, type Account } from "./model";
 
 type GachaGame = "genshin" | "starrail";
-interface Archive {
+export interface GachaTarget {
   game: GachaGame;
   uid: string;
+}
+interface Archive extends GachaTarget {
   total: number;
   fiveStar: number;
   knownRank: number;
@@ -35,14 +37,14 @@ const pools: Record<GachaGame, Record<string, string>> = {
   genshin: { "100": "新手祈愿", "200": "常驻祈愿", "301": "角色活动祈愿", "302": "武器活动祈愿", "500": "集录祈愿" },
   starrail: { "1": "常驻跃迁", "2": "始发跃迁", "11": "角色活动跃迁", "12": "光锥活动跃迁", "21": "角色联动跃迁", "22": "光锥联动跃迁" },
 };
-const archiveKey = (archive: Archive) => archive.game + ":" + archive.uid;
+const archiveKey = (archive: GachaTarget) => archive.game + ":" + archive.uid;
 const poolName = (game: GachaGame, pool: string) => pools[game][pool] ?? "卡池 " + pool;
 const pageSize = 50;
 
-export function Gacha({ accounts }: { accounts: Account[] }) {
+export function Gacha({ accounts, target }: { accounts: Account[]; target: GachaTarget | null }) {
   const picker = useRef<HTMLInputElement>(null);
   const [archives, setArchives] = useState<Archive[]>([]);
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState(() => target ? archiveKey(target) : "");
   const [pool, setPool] = useState("");
   const [offset, setOffset] = useState(0);
   const [page, setPage] = useState<Page>({ rows: [], total: 0 });
@@ -52,7 +54,9 @@ export function Gacha({ accounts }: { accounts: Account[] }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [revision, setRevision] = useState(0);
-  const archive = archives.find((entry) => archiveKey(entry) === selected) ?? archives[0];
+  const archive = selected ? archives.find(entry => archiveKey(entry) === selected) : archives[0];
+  const missingTarget = target && !archives.some(entry => archiveKey(entry) === archiveKey(target)) ? target : null;
+  const shown = archive ?? missingTarget;
 
   useEffect(() => {
     void invoke<Archive[]>("list_gacha").then(setArchives).catch(reason => setError(errorMessage(reason)))
@@ -101,7 +105,7 @@ export function Gacha({ accounts }: { accounts: Account[] }) {
     }
   }
 
-  function archiveLabel(entry: Archive) {
+  function archiveLabel(entry: GachaTarget) {
     const account = accounts.find(account => account.role.game === entry.game && account.role.uid === entry.uid);
     return games[entry.game].name + (account ? " · " + account.role.name : "") + " · UID " + entry.uid;
   }
@@ -116,24 +120,25 @@ export function Gacha({ accounts }: { accounts: Account[] }) {
     </header>
     {error && <p className="notice error" role="alert">{error}</p>}
     {notice && <p className="notice success" role="status">{notice}</p>}
-    {!archive ? <EmptyState icon={<Sparkles size={29} />} title={loading ? "正在读取记录" : "还没有抽卡记录"}
-      detail={loading ? undefined : "选择原神 UIGF 或崩铁 UIGF／SRGF 的 JSON 导出文件。"} /> :
-      <>
-        <div className="panel archive-header">
-          <GameMark game={archive.game} />
-          <label>账号
-            <select value={archiveKey(archive)} onChange={event => {
-              setSelected(event.target.value);
-              setPool("");
-              setOffset(0);
-              setError("");
-            }}>
-              {archives.map(entry => <option key={archiveKey(entry)} value={archiveKey(entry)}>{archiveLabel(entry)}</option>)}
-            </select>
-          </label>
-          <div className="archive-stat"><span>已存记录</span><strong>{archive.total}</strong></div>
-          <div className="archive-stat"><span>已识别五星</span><strong>{archive.knownRank ? archive.fiveStar : "—"}</strong></div>
-        </div>
+    {!loading && shown && <div className="panel archive-header">
+      <GameMark game={shown.game} />
+      <label>账号
+        <select value={archiveKey(shown)} onChange={event => {
+          setSelected(event.target.value);
+          setPool("");
+          setOffset(0);
+          setError("");
+        }}>
+          {missingTarget && <option value={archiveKey(missingTarget)}>{archiveLabel(missingTarget)}</option>}
+          {archives.map(entry => <option key={archiveKey(entry)} value={archiveKey(entry)}>{archiveLabel(entry)}</option>)}
+        </select>
+      </label>
+      {archive && <>
+        <div className="archive-stat"><span>已存记录</span><strong>{archive.total}</strong></div>
+        <div className="archive-stat"><span>已识别五星</span><strong>{archive.knownRank ? archive.fiveStar : "—"}</strong></div>
+      </>}
+    </div>}
+    {archive ? (
         <div className="panel table-panel">
           <div className="panel-title">
             <h2>获得记录</h2>
@@ -158,6 +163,8 @@ export function Gacha({ accounts }: { accounts: Account[] }) {
             <button className="icon-button" aria-label="下一页" disabled={offset + pageSize >= page.total || pageLoading} onClick={() => setOffset(offset + pageSize)}><ChevronRight size={18} /></button>
           </div>
         </div>
-      </>}
+    ) : <EmptyState icon={<Sparkles size={29} />}
+      title={loading ? "正在读取记录" : shown ? "该账号还没有抽卡记录" : "还没有抽卡记录"}
+      detail={loading ? undefined : "选择原神 UIGF 或崩铁 UIGF／SRGF 的 JSON 导出文件。"} />}
   </>;
 }

@@ -132,6 +132,8 @@ nav { display: grid; gap: 5px; }
 .section-heading, .panel-title { display: flex; gap: 12px; justify-content: space-between; align-items: center; }
 .section-heading { margin-bottom: 14px; }
 .section-heading select, .panel-title select { max-width: 240px; }
+.card-controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.card-controls .button { white-space: nowrap; }
 .empty-state {
   display: grid;
   justify-items: center;
@@ -165,6 +167,9 @@ nav { display: grid; gap: 5px; }
 .account-card, .panel { border: 1px solid var(--border); background: var(--panel); border-radius: 13px; box-shadow: var(--shadow); }
 .account-card { padding: 17px; display: flex; flex-direction: column; min-width: 0; }
 .account-heading { display: flex; gap: 11px; align-items: center; }
+.follow-button { flex: none; }
+.follow-button[aria-pressed="true"] { color: #93640b; }
+.card-gacha { display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; }
 .account-identity { min-width: 0; flex: 1; }
 .account-identity h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .game-mark { display: grid; place-items: center; height: 43px; width: 43px; border-radius: 12px; font-size: 19px; font-weight: 700; flex: none; }

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { CircleAlert, Link2, Pencil, Plus, ScanLine, Trash2, UserRound, X } from "lucide-react";
+import { ChevronDown, ChevronUp, CircleAlert, Link2, Pencil, Plus, ScanLine, Sparkles, Star, Trash2, UserRound, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { dateTime, errorMessage, games, type Account, type Game, type Meter } from "./model";
 import { MiyousheQr } from "./MiyousheQr";
@@ -22,10 +22,14 @@ function ResourceMeter({ label, meter }: { label: string; meter: Meter | null })
   );
 }
 
-export function AccountCard({ account, onEdit, onRemove }: {
+export function AccountCard({ account, busy, order, onFollow, onEdit, onRemove, onGacha }: {
   account: Account;
+  busy: boolean;
+  order?: { earlier?: () => void; later?: () => void };
+  onFollow: () => void;
   onEdit: () => void;
   onRemove: () => void;
+  onGacha?: () => void;
 }) {
   const { role, notes, issue } = account;
   const game = games[role.game];
@@ -41,6 +45,11 @@ export function AccountCard({ account, onEdit, onRemove }: {
           <h3 title={role.name}>{role.name}</h3>
         </div>
         <span className={"status-pill " + (issue ? "warning" : manual ? "neutral" : "good")}>{status}</span>
+        <button className="icon-button follow-button" type="button" aria-pressed={account.followed}
+          aria-label={"关注「" + role.name + "」"} title={account.followed ? "取消关注" : "关注账号"}
+          disabled={busy} onClick={onFollow}>
+          <Star size={17} fill={account.followed ? "currentColor" : "none"} />
+        </button>
       </div>
       <p className="role-detail">{details.join(" · ") || "未填写区服与 UID"}</p>
       <div className="account-meters">
@@ -51,17 +60,26 @@ export function AccountCard({ account, onEdit, onRemove }: {
         ) : null}
       </div>
       {issue && <p className="card-issue"><CircleAlert size={15} />{issue}</p>}
+      {onGacha && <button type="button" className="text-button card-gacha" onClick={onGacha}>
+        <Sparkles size={15} />{role.game === "genshin" ? "祈愿记录" : "跃迁记录"}
+      </button>}
       <div className="account-footer">
         <div className="small muted">
           <div>{manual ? "本地记录" : "米游社"} · 资料 {dateTime.format(account.profileAt * 1000)}</div>
           {account.notesAt && !manual && <div>便笺 {dateTime.format(account.notesAt * 1000)}</div>}
         </div>
         <div className="icon-actions">
-          <button className="icon-button" type="button" onClick={onEdit}
+          {order && <>
+            <button className="icon-button" type="button" onClick={order.earlier} disabled={busy || !order.earlier}
+              title="上移" aria-label={"上移「" + role.name + "」"}><ChevronUp size={19} /></button>
+            <button className="icon-button" type="button" onClick={order.later} disabled={busy || !order.later}
+              title="下移" aria-label={"下移「" + role.name + "」"}><ChevronDown size={19} /></button>
+          </>}
+          <button className="icon-button" type="button" onClick={onEdit} disabled={busy}
             title={manual ? "编辑账号" : "更新连接"} aria-label={manual ? "编辑账号" : "更新连接"}>
             {manual ? <Pencil size={17} /> : <Link2 size={17} />}
           </button>
-          <button className="icon-button delete-button" type="button" onClick={onRemove}
+          <button className="icon-button delete-button" type="button" onClick={onRemove} disabled={busy}
             title={manual ? "移除账号" : "断开连接"} aria-label={manual ? "移除账号" : "断开连接"}>
             <Trash2 size={17} />
           </button>

@@ -100,3 +100,20 @@
 - 首版按 Windows 支持，其他系统的安装发现、凭据存储和工具调用仍需各自适配。
 
 尚未验证：云端工具链安装、完整编译耗时和内存峰值、Windows 产物运行及安装包。暂不将远程构建标记为已支持。
+
+## 补充：原神与崩铁战绩（2026-11-13）
+
+使用已扫码的国服会话，对每款游戏的一张已绑定角色卡片发起只读查询。探测记录只保留响应码和字段名。以下结果反映此次请求，数据展示权限和安全验证可能因角色或会话而异。
+
+| 数据 | 接口 | 本轮结果 |
+| --- | --- | --- |
+| 原神探索度 | `genshin/api/index`，公开实现读取 `world_explorations` | 安全验证 `1034` |
+| 原神深境螺旋 | `genshin/api/spiralAbyss` | 安全验证 `1034` |
+| 原神幻想真境剧诗 | `genshin/api/role_combat` | `0`，返回 `data` 和 `is_unlock` |
+| 原神幽境危战 | `genshin/api/hard_challenge` | `0`，返回 `data` 和 `is_unlock` |
+| 崩铁混沌回忆、虚构叙事、末日幻影 | `hkrpg/api/challenge`、`challenge_story`、`challenge_boss` | 均返回安全验证 `10035` |
+| 崩铁异相仲裁 | `hkrpg/api/challenge_peak` | `0`，返回 `challenge_peak_records` 等字段 |
+
+成功响应确认了对应查询可用。后续显示战绩时还需区分玩法未解锁、当期无记录和查询失败，并按期次读取星数、层数或用时。探索度可按区域展示，待完成米游社要求的验证后复测。接口参考 [提瓦特指南](https://github.com/BTMuli/TeyvatGuide)、[原神探索度数据模型](https://github.com/seriaati/genshin.py/blob/master/genshin/models/genshin/chronicle/stats.py) 和 [崩铁战绩查询](https://github.com/seriaati/genshin.py/blob/master/genshin/client/components/chronicle/starrail.py)。
+
+逐抽祈愿和跃迁记录需要单独的抽卡历史授权 `authkey`。原型已支持从卡片打开对应游戏与 UID 的 UIGF／SRGF 本地档案。在线增量同步可进一步验证用户提供的游戏记录链接，按 UID 校验并沿用现有去重逻辑。本轮只核对了接口和格式，未在线拉取逐抽记录。[抽卡接口](https://uigf.org/zh/mihoyo-api-collection/hoyolab/user/game_account_info.html) · [UIGF 标准](https://uigf.org/zh/standards/uigf.html)

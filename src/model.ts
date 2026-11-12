@@ -25,6 +25,7 @@ export interface Account {
   id: string;
   role: Role;
   source: "manual" | "miyoushe";
+  followed: boolean;
   connection: string | null;
   profileAt: number;
   notesAt: number | null;

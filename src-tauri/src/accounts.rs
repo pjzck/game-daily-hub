@@ -68,11 +68,28 @@ pub struct Account {
     pub id: Uuid,
     pub role: Role,
     pub source: Source,
+    #[serde(default = "followed_by_default")]
+    pub followed: bool,
     pub connection: Option<Uuid>,
     pub profile_at: u64,
     pub notes_at: Option<u64>,
     pub notes: Option<Notes>,
     pub issue: Option<String>,
+}
+
+fn followed_by_default() -> bool {
+    true
+}
+
+#[derive(Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum CardChange {
+    Follow { followed: bool },
+    Swap { other_id: Uuid },
 }
 
 #[derive(Deserialize)]
@@ -161,6 +178,36 @@ pub async fn list_accounts(store: State<'_, AccountStore>) -> Result<Vec<Account
 }
 
 #[tauri::command]
+pub async fn update_account_card(
+    id: Uuid,
+    change: CardChange,
+    store: State<'_, AccountStore>,
+) -> Result<Vec<Account>, String> {
+    let _guard = store.operation.lock().await;
+    let mut workspace = store.read()?;
+    update_card(&mut workspace.accounts, id, change)?;
+    store.save(workspace)
+}
+
+fn update_card(accounts: &mut [Account], id: Uuid, change: CardChange) -> Result<(), String> {
+    let index = accounts
+        .iter()
+        .position(|entry| entry.id == id)
+        .ok_or("找不到这张账号卡片。")?;
+    match change {
+        CardChange::Follow { followed } => accounts[index].followed = followed,
+        CardChange::Swap { other_id } => {
+            let other = accounts
+                .iter()
+                .position(|entry| entry.id == other_id)
+                .ok_or("找不到要交换的卡片。")?;
+            accounts.swap(index, other);
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn save_manual_account(
     input: ManualInput,
     store: State<'_, AccountStore>,
@@ -200,6 +247,7 @@ pub async fn save_manual_account(
         id,
         role,
         source: Source::Manual,
+        followed: followed_by_default(),
         connection: None,
         profile_at: now(),
         notes_at: input.stamina.as_ref().map(|_| now()),
@@ -217,7 +265,10 @@ pub async fn save_manual_account(
                 .iter_mut()
                 .find(|entry| entry.id == id && entry.source == Source::Manual)
                 .ok_or("找不到要编辑的手动账号。")?;
-            *existing = account;
+            *existing = Account {
+                followed: existing.followed,
+                ..account
+            };
         }
         None => workspace.accounts.push(account),
     }
@@ -388,6 +439,7 @@ async fn apply_roles(
                 id: Uuid::new_v4(),
                 role,
                 source: Source::Miyoushe,
+                followed: followed_by_default(),
                 connection: Some(connection),
                 profile_at,
                 notes_at: None,
@@ -417,6 +469,47 @@ async fn apply_roles(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn legacy_cards_keep_follow_state_and_order_on_disk() {
+        let directory = tempfile::tempdir().unwrap();
+        let store = AccountStore::open(directory.path().to_path_buf()).unwrap();
+        let role = json!({ "game": "genshin", "uid": "100000001", "server": "cn_gf01", "serverName": "示例", "name": "示例", "level": 10 });
+        let ids = [Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4()];
+        let accounts =
+            ids.map(|id| json!({ "id": id, "role": role, "source": "manual", "profileAt": 1 }));
+        fs::write(
+            &store.path,
+            json!({ "accounts": accounts, "credentials": {} }).to_string(),
+        )
+        .unwrap();
+
+        let mut workspace = store.read().unwrap();
+        assert!(workspace.accounts.iter().all(|account| account.followed));
+        update_card(
+            &mut workspace.accounts,
+            ids[0],
+            CardChange::Follow { followed: false },
+        )
+        .unwrap();
+        update_card(
+            &mut workspace.accounts,
+            ids[0],
+            CardChange::Swap { other_id: ids[2] },
+        )
+        .unwrap();
+        store.save(workspace).unwrap();
+
+        let saved: Vec<_> = store
+            .read()
+            .unwrap()
+            .accounts
+            .into_iter()
+            .map(|account| (account.id, account.followed))
+            .collect();
+        assert_eq!(saved, [(ids[2], true), (ids[1], true), (ids[0], false)]);
+    }
 
     #[test]
     #[ignore = "uses a local signed-in account and the live MiYouShe service"]

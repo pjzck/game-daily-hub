@@ -1,6 +1,7 @@
 fn main() {
     let commands = &[
         "list_accounts",
+        "update_account_card",
         "save_manual_account",
         "remove_account",
         "connect_accounts",

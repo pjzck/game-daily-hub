@@ -1,14 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
-import { CircleAlert, LayoutGrid, Link2, Monitor, Plus, RefreshCw, Sparkles, UsersRound } from "lucide-react";
+import { ArrowUpDown, CircleAlert, LayoutGrid, Link2, Monitor, Plus, RefreshCw, Sparkles, UsersRound } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { AccountCard, AccountDialog, Modal, NoAccounts } from "./Accounts";
 import { Devices } from "./Devices";
-import { Gacha } from "./Gacha";
+import { Gacha, type GachaTarget } from "./Gacha";
 import { errorMessage, games, type Account, type Game } from "./model";
 import "./styles.css";
 
 type View = "accounts" | "devices" | "gacha";
+type FollowFilter = "all" | "followed" | "unfollowed";
+type CardChange = { type: "follow"; followed: boolean } | { type: "swap"; otherId: string };
 const pages = [
   { id: "accounts", title: "账号总览", Icon: LayoutGrid },
   { id: "gacha", title: "抽卡记录", Icon: Sparkles },
@@ -26,6 +28,10 @@ function App() {
   const [view, setView] = useState<View>("accounts");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [filter, setFilter] = useState<Game | "all">("all");
+  const [followFilter, setFollowFilter] = useState<FollowFilter>("all");
+  const [arranging, setArranging] = useState(false);
+  const [cardSaving, setCardSaving] = useState(false);
+  const [gachaTarget, setGachaTarget] = useState<GachaTarget | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -33,7 +39,11 @@ function App() {
   const [removing, setRemoving] = useState<Account>();
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState("");
-  const displayed = filter === "all" ? accounts : accounts.filter(account => account.role.game === filter);
+  const displayed = accounts.filter(account =>
+    (filter === "all" || account.role.game === filter) &&
+    (followFilter === "all" || account.followed === (followFilter === "followed")),
+  );
+  const accountBusy = loading || refreshing || cardSaving;
   const linked = accounts.filter(account => account.source === "miyoushe");
   const issues = linked.filter(account => account.issue);
 
@@ -62,6 +72,25 @@ function App() {
     }
   }
 
+  async function updateCard(id: string, change: CardChange) {
+    setCardSaving(true);
+    setError("");
+    try {
+      setAccounts(await invoke<Account[]>("update_account_card", { id, change }));
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setCardSaving(false);
+    }
+  }
+
+  function openGacha(account: Account) {
+    const { game, uid } = account.role;
+    if (game !== "genshin" && game !== "starrail") return;
+    setGachaTarget({ game, uid });
+    setView("gacha");
+  }
+
   async function remove() {
     if (!removing) return;
     setRemoveBusy(true);
@@ -84,21 +113,24 @@ function App() {
       </div>
       <nav aria-label="主导航">
         {pages.map(({ id, title, Icon }) => <button key={id} className="nav-button"
-          aria-current={view === id ? "page" : undefined} onClick={() => setView(id)}>
+          aria-current={view === id ? "page" : undefined} onClick={() => {
+            if (id === "gacha" && view !== "gacha") setGachaTarget(null);
+            setView(id);
+          }}>
           <Icon size={19} />{title}
         </button>)}
       </nav>
       <div className="sidebar-footer"><span className="indicator" />本地工作区</div>
     </aside>
     <main className="main">
-      {view === "devices" ? <Devices /> : view === "gacha" ? <Gacha accounts={accounts} /> : <>
+      {view === "devices" ? <Devices /> : view === "gacha" ? <Gacha accounts={accounts} target={gachaTarget} /> : <>
         <header className="page-header">
           <div><h1>账号总览</h1><p className="muted">角色资料与每日状态</p></div>
           <div className="page-actions">
-            <button className="button secondary" onClick={refresh} disabled={!linked.length || loading || refreshing}>
+            <button className="button secondary" onClick={refresh} disabled={!linked.length || accountBusy}>
               <RefreshCw size={17} className={refreshing ? "spin" : ""} />{refreshing ? "刷新中…" : "刷新全部"}
             </button>
-            <button className="button primary" onClick={() => setEditing(null)} disabled={loading || refreshing}><Plus size={18} />添加账号</button>
+            <button className="button primary" onClick={() => setEditing(null)} disabled={accountBusy}><Plus size={18} />添加账号</button>
           </div>
         </header>
         {error && <div className="notice error" role="alert">{error}<button className="text-button" onClick={loadAccounts}>重新读取</button></div>}
@@ -108,25 +140,45 @@ function App() {
           <Summary icon={<CircleAlert size={20} />} label="待处理" count={issues.length} tone="amber" />
         </div>
         <div className="section-heading"><h2>账号卡片</h2>
-          {accounts.length > 0 && <select aria-label="筛选游戏" value={filter}
-            onChange={event => setFilter(event.target.value as Game | "all")}>
-            <option value="all">全部游戏</option>
-            {Object.entries(games).map(([key, game]) => <option value={key} key={key}>{game.name}</option>)}
-          </select>}
+          {accounts.length > 0 && <div className="card-controls">
+            <select aria-label="筛选关注状态" value={followFilter} onChange={event => setFollowFilter(event.target.value as FollowFilter)}>
+              <option value="all">全部账号</option>
+              <option value="followed">已关注</option>
+              <option value="unfollowed">未关注</option>
+            </select>
+            <select aria-label="筛选游戏" value={filter} onChange={event => setFilter(event.target.value as Game | "all")}>
+              <option value="all">全部游戏</option>
+              {Object.entries(games).map(([key, game]) => <option value={key} key={key}>{game.name}</option>)}
+            </select>
+            <button type="button" className="button secondary" aria-pressed={arranging}
+              disabled={!arranging && displayed.length < 2} onClick={() => setArranging(value => !value)}>
+              <ArrowUpDown size={16} />{arranging ? "完成排序" : "调整顺序"}
+            </button>
+          </div>}
         </div>
         {loading ? <p className="notice" role="status">正在读取本地账号…</p> :
           accounts.length === 0 ? <NoAccounts add={() => setEditing(null)} /> :
-          displayed.length === 0 ? <p className="notice">该游戏还没有账号。</p> :
-          <section className="account-grid" aria-label="账号列表" aria-busy={refreshing}>
-            {displayed.map(account => <AccountCard key={account.id} account={account}
-              onEdit={() => { if (!refreshing) setEditing(account); }}
-              onRemove={() => { if (!refreshing) { setRemoveError(""); setRemoving(account); } }} />)}
+          displayed.length === 0 ? <p className="notice">当前筛选下没有账号。</p> :
+          <section className="account-grid" aria-label="账号列表" aria-busy={accountBusy}>
+            {displayed.map((account, index) => {
+              const move = (neighbor: Account | undefined) => neighbor && (() => {
+                void updateCard(account.id, { type: "swap", otherId: neighbor.id });
+              });
+              const hasGacha = account.role.uid && (account.role.game === "genshin" || account.role.game === "starrail");
+              return <AccountCard key={account.id} account={account} busy={accountBusy}
+                order={arranging ? { earlier: move(displayed[index - 1]), later: move(displayed[index + 1]) } : undefined}
+                onFollow={() => { void updateCard(account.id, { type: "follow", followed: !account.followed }); }}
+                onEdit={() => setEditing(account)}
+                onRemove={() => { setRemoveError(""); setRemoving(account); }}
+                onGacha={hasGacha ? () => openGacha(account) : undefined} />;
+            })}
           </section>}
       </>}
     </main>
     {editing !== undefined && <AccountDialog account={editing} close={() => setEditing(undefined)} saved={result => {
       setAccounts(result);
       setFilter("all");
+      setFollowFilter("all");
       setError("");
       setEditing(undefined);
     }} />}
