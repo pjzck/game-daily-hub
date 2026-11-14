@@ -117,3 +117,26 @@
 账号卡片已接入幻想真境剧诗、幽境危战和异相仲裁。按需读取期次及成绩，分别显示玩法未解锁、该期无记录和查询失败。探索度可按区域展示，待完成米游社要求的验证后复测。接口参考 [提瓦特指南](https://github.com/BTMuli/TeyvatGuide)、[原神探索度数据模型](https://github.com/seriaati/genshin.py/blob/master/genshin/models/genshin/chronicle/stats.py) 和 [崩铁战绩查询](https://github.com/seriaati/genshin.py/blob/master/genshin/client/components/chronicle/starrail.py)。
 
 逐抽祈愿和跃迁记录需要单独的抽卡历史授权 `authkey`。原型已支持从卡片打开对应游戏与 UID 的 UIGF／SRGF 本地档案。在线增量同步可进一步验证用户提供的游戏记录链接，按 UID 校验并沿用现有去重逻辑。本轮只核对了接口和格式，未在线拉取逐抽记录。[抽卡接口](https://uigf.org/zh/mihoyo-api-collection/hoyolab/user/game_account_info.html) · [UIGF 标准](https://uigf.org/zh/standards/uigf.html)
+
+## 更多账号信息与抽卡同步（2026-11-13）
+
+用现有扫码会话做了单页和字段探测。探测只记录了响应状态、字段名、记录条数和 UID 是否匹配。账号卡片现已显示两款游戏的派遣、原神洞天宝钱与周活跃度、崩铁储备开拓力与模拟宇宙积分，支持在卡片内单独刷新。
+
+| 数据 | 获取方式 | 实测结果 |
+| --- | --- | --- |
+| 原神日常 | 现有米游社小组件便笺 | 返回洞天宝钱当前值与上限、派遣槽位和状态、每日委托奖励状态、周活跃度字段。可随体力一起读取 |
+| 崩铁日常 | 现有米游社小组件便笺 | 返回储备开拓力及满值状态、委托槽位、模拟宇宙积分与周奖励进度。此次委托列表为空 |
+| 崩铁模拟宇宙战绩 | 米游社 `hkrpg/api/rogue`，按角色读取 | 返回基本信息和本期、上期记录字段。可放在战绩页按需查询 |
+| 原神、崩铁完整角色列表 | 原神 `character/list`、崩铁 `avatar/info` | 分别要求安全验证 `1034`、`10035` |
+| 原神区域探索度 | 战绩首页 `world_explorations` | 前一轮要求安全验证 `1034` |
+| 崩铁开拓月历 | 米游社月历，按月汇总星琼和通票 | 官方有该功能，社区文档给出独立的月历接口和 Cookie Token 要求，本轮未测试 |
+
+原神若只需要查看公开展示的角色和装备，也可用 Enka.Network 按 UID 查询公开展柜。数据取决于用户的展示设置，适合配装预览。完整角色清单、战绩和探索度仍要各自的数据源。[原神战绩源码](https://github.com/seriaati/genshin.py/blob/master/genshin/client/components/chronicle/genshin.py) · [崩铁战绩源码](https://github.com/seriaati/genshin.py/blob/master/genshin/client/components/chronicle/starrail.py) · [开拓月历接口](https://uigf.org/zh/mihoyo-api-collection/hoyolab/user/game_account_info.html) · [Enka 展柜文档](https://github.com/EnkaNetwork/API-docs/blob/master/api_chs.md)
+
+| 抽卡来源 | 适用范围 | 验证情况 |
+| --- | --- | --- |
+| 米游社扫码会话 | 原神国服。为当前角色申请 `webview_gacha` 专用临时授权，再读取游戏历史 | 两个已扫码角色都成功取得授权。角色活动祈愿各试一页，一个返回空列表，另一个返回 5 条且全部匹配所选 UID |
+| PC 游戏内的历史页 | 原神和崩铁。进入对应角色的祈愿或跃迁历史后，从游戏自己的网页缓存或日志读取临时记录链接，也可使用已有链接 | AuroraExport 有 Windows 实现。本轮未在本机读取游戏缓存或用崩铁链接验证；已核对的米游社扫码方案只支持原神国服 |
+| UIGF／SRGF 导出文件 | 原神和崩铁。用已有工具导出 JSON，导入现有抽卡页面 | 桌面端已支持，能合并已有长期存档 |
+
+原神账号档案已提供「同步祈愿」，读取角色、武器、集录、常驻和新手祈愿。同步结果按游戏和 UID 归档，逐页校验返回的 UID，再用记录 ID 去重。真实账号在临时档案首次读到 712 条，第二次新增 0 条，导入的旧记录保留。历史只覆盖服务端当前可查区间，临时授权仅用于本次读取。崩铁 PC 游戏历史同步仍待验证。[原神扫码授权实现](https://github.com/android-tool-suite/plugin-gacha-analysis/blob/main/src/web/mihoyo.js) · [PC 取数实现](https://github.com/QWERTY770/AuroraExport/blob/main/src/urltools.rs) · [UIGF 标准](https://uigf.org/zh/standards/uigf.html)

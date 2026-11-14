@@ -11,6 +11,7 @@
     "allow-remove-account",
     "allow-connect-accounts",
     "allow-refresh-accounts",
+    "allow-refresh-account",
     "allow-start-miyoushe-login",
     "allow-poll-miyoushe-login",
     "allow-finish-miyoushe-login",
@@ -18,6 +19,7 @@
     "allow-list-mumu-instances",
     "allow-list-gacha",
     "allow-import-gacha",
+    "allow-sync-genshin-wishes",
     "allow-gacha-page"
   ]
 }

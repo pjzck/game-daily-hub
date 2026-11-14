@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ChevronLeft, ChevronRight, Sparkles, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw, Sparkles, Upload } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { EmptyState, GameMark } from "./Accounts";
 import { errorMessage, games, type Account } from "./model";
@@ -50,13 +50,21 @@ export function Gacha({ accounts, target }: { accounts: Account[]; target: Gacha
   const [page, setPage] = useState<Page>({ rows: [], total: 0 });
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [revision, setRevision] = useState(0);
-  const archive = selected ? archives.find(entry => archiveKey(entry) === selected) : archives[0];
-  const missingTarget = target && !archives.some(entry => archiveKey(entry) === archiveKey(target)) ? target : null;
-  const shown = archive ?? missingTarget;
+  const linkedGenshin = accounts.filter(account => account.source === "miyoushe" && account.connection && account.role.game === "genshin" && account.role.uid);
+  const choices = new Map<string, GachaTarget>(archives.map(entry => [archiveKey(entry), entry]));
+  for (const { role } of linkedGenshin) {
+    const entry: GachaTarget = { game: "genshin", uid: role.uid };
+    choices.set(archiveKey(entry), entry);
+  }
+  if (target) choices.set(archiveKey(target), target);
+  const shown = choices.get(selected) ?? choices.values().next().value;
+  const archive = shown && archives.find(entry => archiveKey(entry) === archiveKey(shown));
+  const syncAccount = shown?.game === "genshin" ? linkedGenshin.find(account => account.role.uid === shown.uid) : undefined;
 
   useEffect(() => {
     void invoke<Archive[]>("list_gacha").then(setArchives).catch(reason => setError(errorMessage(reason)))
@@ -105,6 +113,28 @@ export function Gacha({ accounts, target }: { accounts: Account[]; target: Gacha
     }
   }
 
+  async function syncWishes() {
+    if (!syncAccount || syncing || importing) return;
+    setSelected(archiveKey({ game: "genshin", uid: syncAccount.role.uid }));
+    setSyncing(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await invoke<ImportResult>("sync_genshin_wishes", { id: syncAccount.id });
+      setArchives(result.archives);
+      setPool("");
+      setOffset(0);
+      setRevision(current => current + 1);
+      setNotice(result.added || result.duplicates
+        ? `同步完成，新增 ${result.added} 条，跳过 ${result.duplicates} 条重复记录。`
+        : "同步完成，所查卡池暂无可读取的记录。");
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   function archiveLabel(entry: GachaTarget) {
     const account = accounts.find(account => account.role.game === entry.game && account.role.uid === entry.uid);
     return games[entry.game].name + (account ? " · " + account.role.name : "") + " · UID " + entry.uid;
@@ -114,23 +144,28 @@ export function Gacha({ accounts, target }: { accounts: Account[]; target: Gacha
     <header className="page-header">
       <div><h1>抽卡记录</h1><p className="muted">原神祈愿与崩铁跃迁</p></div>
       <input type="file" accept=".json,application/json" ref={picker} onChange={importFile} hidden />
-      <button className="button primary" onClick={() => picker.current?.click()} disabled={importing || loading}>
-        <Upload size={17} />{importing ? "导入中…" : "导入记录"}
-      </button>
+      <div className="page-actions">
+        {syncAccount && <button className="button primary" onClick={syncWishes} disabled={syncing || importing || loading}>
+          <RefreshCw size={17} className={syncing ? "spin" : undefined} />{syncing ? "同步中…" : "同步祈愿"}
+        </button>}
+        <button className={"button " + (syncAccount ? "secondary" : "primary")} onClick={() => picker.current?.click()} disabled={importing || syncing || loading}>
+          <Upload size={17} />{importing ? "导入中…" : "导入记录"}
+        </button>
+      </div>
     </header>
     {error && <p className="notice error" role="alert">{error}</p>}
     {notice && <p className="notice success" role="status">{notice}</p>}
     {!loading && shown && <div className="panel archive-header">
       <GameMark game={shown.game} />
       <label>账号
-        <select value={archiveKey(shown)} onChange={event => {
+        <select value={archiveKey(shown)} disabled={syncing || importing} onChange={event => {
           setSelected(event.target.value);
           setPool("");
           setOffset(0);
           setError("");
+          setNotice("");
         }}>
-          {missingTarget && <option value={archiveKey(missingTarget)}>{archiveLabel(missingTarget)}</option>}
-          {archives.map(entry => <option key={archiveKey(entry)} value={archiveKey(entry)}>{archiveLabel(entry)}</option>)}
+          {[...choices.values()].map(entry => <option key={archiveKey(entry)} value={archiveKey(entry)}>{archiveLabel(entry)}</option>)}
         </select>
       </label>
       {archive && <>
@@ -164,7 +199,9 @@ export function Gacha({ accounts, target }: { accounts: Account[]; target: Gacha
           </div>
         </div>
     ) : <EmptyState icon={<Sparkles size={29} />}
-      title={loading ? "正在读取记录" : shown ? "该账号还没有抽卡记录" : "还没有抽卡记录"}
-      detail={loading ? undefined : "选择原神 UIGF 或崩铁 UIGF／SRGF 的 JSON 导出文件。"} />}
+      title={loading ? "正在读取记录" : syncing ? "正在同步祈愿" : shown ? "该账号还没有抽卡记录" : "还没有抽卡记录"}
+      detail={loading || syncing ? undefined : syncAccount
+        ? "可同步米游社授权的祈愿历史，也可导入 UIGF 档案。"
+        : "选择原神 UIGF 或崩铁 UIGF／SRGF 的 JSON 导出文件。"} />}
   </>;
 }

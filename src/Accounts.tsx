@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ChevronDown, ChevronUp, CircleAlert, Link2, Pencil, Plus, ScanLine, Sparkles, Star, Trash2, Trophy, UserRound, X } from "lucide-react";
+import { ChevronDown, ChevronUp, CircleAlert, Link2, Pencil, Plus, RefreshCw, ScanLine, Sparkles, Star, Trash2, Trophy, UserRound, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { dateTime, errorMessage, games, type Account, type Game, type Meter } from "./model";
 import { MiyousheQr } from "./MiyousheQr";
@@ -22,19 +22,22 @@ function ResourceMeter({ label, meter }: { label: string; meter: Meter | null })
   );
 }
 
-export function AccountCard({ account, busy, order, onFollow, onEdit, onRemove, onGacha, onBattle }: {
+export function AccountCard({ account, busy, refreshing, order, onFollow, onEdit, onRemove, onGacha, onBattle, onRefresh }: {
   account: Account;
   busy: boolean;
+  refreshing: boolean;
   order?: { earlier?: () => void; later?: () => void };
   onFollow: () => void;
   onEdit: () => void;
   onRemove: () => void;
   onGacha?: () => void;
   onBattle?: () => void;
+  onRefresh?: () => void;
 }) {
   const { role, notes, issue } = account;
   const game = games[role.game];
   const manual = account.source === "manual";
+  const assignmentLabel = role.game === "genshin" ? "探索派遣" : "委托派遣";
   const status = manual ? "手动记录" : issue ? (notes ? "数据待更新" : "待处理") : "已同步";
   const details = [role.serverName, role.uid && "UID " + role.uid, role.level !== null && "Lv. " + role.level].filter(Boolean);
   return (
@@ -59,9 +62,25 @@ export function AccountCard({ account, busy, order, onFollow, onEdit, onRemove, 
         {notes?.fullAt && notes.stamina && notes.stamina.current < notes.stamina.maximum ? (
           <p className="small muted">预计 {dateTime.format(notes.fullAt * 1000)} 回满</p>
         ) : null}
+        {notes?.assignments && <div>
+          <div className="resource-value"><span>{assignmentLabel}</span>
+            <span><strong>{notes.assignments.current}</strong><span className="muted"> / {notes.assignments.maximum}</span></span>
+          </div>
+          {!!notes.assignmentsReady && <p className="small assignment-ready">{notes.assignmentsReady} 项可领取</p>}
+        </div>}
+        {notes?.homeCoin && <ResourceMeter label="洞天宝钱" meter={notes.homeCoin} />}
+        {notes?.reserveStamina != null && <div className="resource-value">
+          <span>储备开拓力</span><span><strong>{notes.reserveStamina}</strong>{notes.reserveFull && <span className="muted"> · 已满</span>}</span>
+        </div>}
+        {notes?.weeklyActivity && <ResourceMeter label="周活跃度" meter={notes.weeklyActivity} />}
+        {notes?.simulatedUniverse && <ResourceMeter label="模拟宇宙积分" meter={notes.simulatedUniverse} />}
       </div>
       {issue && <p className="card-issue"><CircleAlert size={15} />{issue}</p>}
-      {(onGacha || onBattle) && <div className="card-links">
+      {(onGacha || onBattle || onRefresh) && <div className="card-links">
+        {onRefresh && <button type="button" className="text-button" disabled={busy} onClick={onRefresh}
+          aria-label={refreshing ? "正在刷新「" + role.name + "」" : "刷新「" + role.name + "」"}>
+          <RefreshCw size={15} className={refreshing ? "spin" : undefined} />{refreshing ? "刷新中…" : "刷新"}
+        </button>}
         {onBattle && <button type="button" className="text-button" onClick={onBattle}>
           <Trophy size={15} />战绩
         </button>}

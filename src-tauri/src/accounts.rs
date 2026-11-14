@@ -57,12 +57,19 @@ pub struct Meter {
     pub maximum: u32,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Default, Deserialize, Serialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct Notes {
     pub stamina: Option<Meter>,
     pub activity: Option<Meter>,
     pub full_at: Option<u64>,
+    pub assignments: Option<Meter>,
+    pub assignments_ready: Option<u32>,
+    pub home_coin: Option<Meter>,
+    pub reserve_stamina: Option<u32>,
+    pub reserve_full: Option<bool>,
+    pub weekly_activity: Option<Meter>,
+    pub simulated_universe: Option<Meter>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -148,6 +155,11 @@ impl AccountStore {
         })
     }
 
+    pub(crate) async fn linked_session(&self, id: Uuid) -> Result<(Role, Credentials), String> {
+        let _guard = self.operation.lock().await;
+        linked_session(&self.read()?, id)
+    }
+
     fn read(&self) -> Result<Workspace, String> {
         match fs::read(&self.path) {
             Ok(bytes) => serde_json::from_slice(&bytes)
@@ -196,14 +208,11 @@ pub async fn get_battle_records(
     id: Uuid,
     store: State<'_, AccountStore>,
 ) -> Result<BattleRecords, String> {
-    let (role, credentials) = {
-        let _guard = store.operation.lock().await;
-        battle_record_session(&store.read()?, id)?
-    };
+    let (role, credentials) = store.linked_session(id).await?;
     battle_records::fetch(&store.client, &credentials, &role).await
 }
 
-fn battle_record_session(workspace: &Workspace, id: Uuid) -> Result<(Role, Credentials), String> {
+fn linked_session(workspace: &Workspace, id: Uuid) -> Result<(Role, Credentials), String> {
     let account = workspace
         .accounts
         .iter()
@@ -292,8 +301,7 @@ pub async fn save_manual_account(
         notes_at: input.stamina.as_ref().map(|_| now()),
         notes: input.stamina.map(|stamina| Notes {
             stamina: Some(stamina),
-            activity: None,
-            full_at: None,
+            ..Notes::default()
         }),
         issue: None,
     };
@@ -395,6 +403,60 @@ pub(crate) async fn connect(
 }
 
 #[tauri::command]
+pub async fn refresh_account(
+    id: Uuid,
+    store: State<'_, AccountStore>,
+) -> Result<Vec<Account>, String> {
+    let _guard = store.operation.lock().await;
+    let mut workspace = store.read()?;
+    refresh_one(&store.client, &mut workspace, id).await?;
+    store.save(workspace)
+}
+
+async fn refresh_one(
+    client: &reqwest::Client,
+    workspace: &mut Workspace,
+    id: Uuid,
+) -> Result<(), String> {
+    let index = workspace
+        .accounts
+        .iter()
+        .position(|entry| entry.id == id)
+        .ok_or("找不到这张账号卡片。")?;
+    let account = &workspace.accounts[index];
+    let connection = account
+        .connection
+        .filter(|_| account.source == Source::Miyoushe)
+        .ok_or("请先连接该角色的米游社账号。")?;
+    let profile = async {
+        let credentials = workspace.credentials_for(connection)?;
+        let roles = community::roles(client, &credentials).await?;
+        let single_role = roles
+            .iter()
+            .filter(|role| role.game == account.role.game)
+            .count()
+            == 1;
+        let role = roles
+            .into_iter()
+            .find(|role| role.matches(&account.role))
+            .ok_or("本次未返回该角色，已保留上次数据。")?;
+        Ok::<_, String>((role, credentials, single_role))
+    }
+    .await;
+    let account = &mut workspace.accounts[index];
+    match profile {
+        Ok((role, credentials, single_role)) => {
+            let profile_at = now();
+            let result = community::notes(client, &credentials, &role, single_role).await;
+            account.role = role;
+            apply_notes(account, profile_at, result);
+        }
+        Err(error) => account.issue = Some(error),
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn refresh_accounts(store: State<'_, AccountStore>) -> Result<Vec<Account>, String> {
     let _guard = store.operation.lock().await;
     let mut workspace = store.read()?;
@@ -488,15 +550,19 @@ async fn apply_roles(
         }
         account.source = Source::Miyoushe;
         account.connection = Some(connection);
-        account.profile_at = profile_at;
-        match result {
-            Ok(notes) => {
-                account.notes = Some(notes);
-                account.notes_at = Some(now());
-                account.issue = None;
-            }
-            Err(error) => account.issue = Some(error),
+        apply_notes(account, profile_at, result);
+    }
+}
+
+fn apply_notes(account: &mut Account, profile_at: u64, result: Result<Notes, String>) {
+    account.profile_at = profile_at;
+    match result {
+        Ok(notes) => {
+            account.notes = Some(notes);
+            account.notes_at = Some(now());
+            account.issue = None;
         }
+        Err(error) => account.issue = Some(error),
     }
 }
 
@@ -504,6 +570,60 @@ async fn apply_roles(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    #[ignore = "uses local signed-in roles and the live MiYouShe service"]
+    fn live_wishes_and_single_account_refresh() {
+        tauri::async_runtime::block_on(async {
+            let directory =
+                std::env::var_os("GAME_DAILY_HUB_DATA_DIR").expect("app data directory");
+            let store = AccountStore::open(directory.into()).expect("create HTTP client");
+            let mut workspace = store.read().expect("read linked roles");
+            let mut added = 0;
+            for game in [Game::Genshin, Game::Starrail] {
+                let id = workspace
+                    .accounts
+                    .iter()
+                    .rev()
+                    .find(|card| card.source == Source::Miyoushe && card.role.game == game)
+                    .expect("linked game role")
+                    .id;
+                let before = serde_json::to_value(&workspace.accounts).unwrap();
+                refresh_one(&store.client, &mut workspace, id)
+                    .await
+                    .expect("refresh one role");
+                let after = serde_json::to_value(&workspace.accounts).unwrap();
+                for (index, card) in workspace.accounts.iter().enumerate() {
+                    if card.id != id {
+                        assert!(before[index] == after[index], "a different card changed");
+                        continue;
+                    }
+                    assert!(card.issue.is_none(), "{game:?}: {:?}", card.issue);
+                    let notes = card.notes.as_ref().expect("received notes");
+                    assert!(notes.assignments.is_some(), "missing assignment slots");
+                    match game {
+                        Game::Genshin => assert!(notes.home_coin.is_some(), "missing home coin"),
+                        Game::Starrail => {
+                            assert!(notes.reserve_stamina.is_some(), "missing reserve stamina")
+                        }
+                        _ => unreachable!(),
+                    }
+                    println!("{game:?}: single refresh isolated, additional notes received");
+                }
+                if game == Game::Genshin {
+                    let (new, duplicates) = crate::gacha::check_wish_sync(&store, id).await;
+                    println!(
+                        "Genshin wishes: {new} new on first sync, {duplicates} duplicates on second sync"
+                    );
+                    added += new;
+                }
+            }
+            assert!(
+                added > 0,
+                "need a role with recent wish history to exercise deduplication"
+            );
+        });
+    }
 
     #[test]
     #[ignore = "uses a local signed-in account and the live MiYouShe service"]
@@ -522,7 +642,7 @@ mod tests {
                 assert!(accounts.peek().is_some(), "no linked {game:?} role");
                 for account in accounts {
                     let (role, credentials) =
-                        battle_record_session(&workspace, account.id).expect("load signed-in role");
+                        linked_session(&workspace, account.id).expect("load signed-in role");
                     let records = battle_records::fetch(&store.client, &credentials, &role)
                         .await
                         .expect("fetch battle records");

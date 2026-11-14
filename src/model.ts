@@ -33,6 +33,13 @@ export interface Account {
     stamina: Meter | null;
     activity: Meter | null;
     fullAt: number | null;
+    assignments: Meter | null;
+    assignmentsReady: number | null;
+    homeCoin: Meter | null;
+    reserveStamina: number | null;
+    reserveFull: boolean | null;
+    weeklyActivity: Meter | null;
+    simulatedUniverse: Meter | null;
   } | null;
   issue: string | null;
 }

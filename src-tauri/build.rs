@@ -7,6 +7,7 @@ fn main() {
         "remove_account",
         "connect_accounts",
         "refresh_accounts",
+        "refresh_account",
         "start_miyoushe_login",
         "poll_miyoushe_login",
         "finish_miyoushe_login",
@@ -14,6 +15,7 @@ fn main() {
         "list_mumu_instances",
         "list_gacha",
         "import_gacha",
+        "sync_genshin_wishes",
         "gacha_page",
     ];
     tauri_build::try_build(

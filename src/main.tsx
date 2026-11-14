@@ -34,7 +34,7 @@ function App() {
   const [cardSaving, setCardSaving] = useState(false);
   const [gachaTarget, setGachaTarget] = useState<GachaTarget | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshing, setRefreshing] = useState<{ id?: string } | null>(null);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<Account | null>();
   const [battleAccount, setBattleAccount] = useState<Account>();
@@ -45,7 +45,7 @@ function App() {
     (filter === "all" || account.role.game === filter) &&
     (followFilter === "all" || account.followed === (followFilter === "followed")),
   );
-  const accountBusy = loading || refreshing || cardSaving;
+  const accountBusy = loading || refreshing !== null || cardSaving;
   const linked = accounts.filter(account => account.source === "miyoushe");
   const issues = linked.filter(account => account.issue);
 
@@ -62,15 +62,18 @@ function App() {
   }
   useEffect(() => { void loadAccounts(); }, []);
 
-  async function refresh() {
-    setRefreshing(true);
+  async function refresh(id?: string) {
+    if (accountBusy) return;
+    setRefreshing({ id });
     setError("");
     try {
-      setAccounts(await invoke<Account[]>("refresh_accounts"));
+      setAccounts(await (id
+        ? invoke<Account[]>("refresh_account", { id })
+        : invoke<Account[]>("refresh_accounts")));
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
-      setRefreshing(false);
+      setRefreshing(null);
     }
   }
 
@@ -129,8 +132,8 @@ function App() {
         <header className="page-header">
           <div><h1>账号总览</h1><p className="muted">角色资料与每日状态</p></div>
           <div className="page-actions">
-            <button className="button secondary" onClick={refresh} disabled={!linked.length || accountBusy}>
-              <RefreshCw size={17} className={refreshing ? "spin" : ""} />{refreshing ? "刷新中…" : "刷新全部"}
+            <button className="button secondary" onClick={() => void refresh()} disabled={!linked.length || accountBusy}>
+              <RefreshCw size={17} className={refreshing && !refreshing.id ? "spin" : undefined} />{refreshing && !refreshing.id ? "刷新中…" : "刷新全部"}
             </button>
             <button className="button primary" onClick={() => setEditing(null)} disabled={accountBusy}><Plus size={18} />添加账号</button>
           </div>
@@ -167,11 +170,12 @@ function App() {
                 void updateCard(account.id, { type: "swap", otherId: neighbor.id });
               });
               const supportsGameRecords = account.role.uid && (account.role.game === "genshin" || account.role.game === "starrail");
-              return <AccountCard key={account.id} account={account} busy={accountBusy}
+              return <AccountCard key={account.id} account={account} busy={accountBusy} refreshing={refreshing?.id === account.id}
                 order={arranging ? { earlier: move(displayed[index - 1]), later: move(displayed[index + 1]) } : undefined}
                 onFollow={() => { void updateCard(account.id, { type: "follow", followed: !account.followed }); }}
                 onEdit={() => setEditing(account)}
                 onRemove={() => { setRemoveError(""); setRemoving(account); }}
+                onRefresh={account.source === "miyoushe" && account.connection ? () => void refresh(account.id) : undefined}
                 onGacha={supportsGameRecords ? () => openGacha(account) : undefined}
                 onBattle={supportsGameRecords && account.source === "miyoushe" && account.connection
                   ? () => setBattleAccount(account) : undefined} />;

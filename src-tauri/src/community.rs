@@ -32,7 +32,7 @@ pub fn validate_credentials(credentials: &Credentials) -> Result<(), String> {
     Ok(())
 }
 
-fn sensitive(value: &str) -> Result<HeaderValue, String> {
+pub(crate) fn sensitive(value: &str) -> Result<HeaderValue, String> {
     let mut header = HeaderValue::from_str(value).map_err(|_| "凭据格式无效。")?;
     header.set_sensitive(true);
     Ok(header)
@@ -46,7 +46,7 @@ pub(crate) fn valid_cookie_value(value: &str) -> bool {
             .all(|ch| ch.is_ascii_graphic() && !matches!(ch, b';' | b',' | b'"'))
 }
 
-fn cookie<'a>(credentials: &'a Credentials, name: &str) -> Option<&'a str> {
+pub(crate) fn cookie<'a>(credentials: &'a Credentials, name: &str) -> Option<&'a str> {
     credentials.secret.split(';').find_map(|entry| {
         let (key, value) = entry.trim().split_once('=')?;
         (key == name && valid_cookie_value(value)).then_some(value)
@@ -137,7 +137,7 @@ pub(crate) fn data(mut payload: Value) -> Result<Value, String> {
     Ok(data)
 }
 
-async fn read_data(request: RequestBuilder) -> Result<Value, String> {
+pub(crate) async fn read_data(request: RequestBuilder) -> Result<Value, String> {
     data(response(request).await?)
 }
 
@@ -361,11 +361,43 @@ pub async fn notes(
         )
     };
     let stamina = stamina.ok_or("角色资料已更新，米游社未返回可识别的体力字段。")?;
+    let genshin = role.game == Game::Genshin;
+    let assignments = if genshin {
+        meter(&data["current_expedition_num"], &data["max_expedition_num"])
+    } else {
+        let accepted = data
+            .get("accepted_expedition_num")
+            .unwrap_or(&data["accepted_epedition_num"]);
+        meter(accepted, &data["total_expedition_num"])
+    };
+    let assignments_ready = assignments.as_ref().and_then(|slots| {
+        let mut ongoing = 0;
+        let mut finished = 0;
+        for assignment in data["expeditions"].as_array()? {
+            match assignment["status"].as_str() {
+                Some("Ongoing") => ongoing += 1,
+                Some("Finished") => finished += 1,
+                _ => {}
+            }
+        }
+        (ongoing + finished == slots.current).then_some(finished)
+    });
     Ok(Notes {
         stamina: Some(stamina),
         activity,
         full_at: recovery
             .filter(|seconds| *seconds <= 604_800)
             .map(|seconds| now() + seconds),
+        assignments,
+        assignments_ready,
+        home_coin: meter(&data["current_home_coin"], &data["max_home_coin"]),
+        reserve_stamina: number(&data["current_reserve_stamina"])
+            .and_then(|value| value.try_into().ok()),
+        reserve_full: data["is_reserve_stamina_full"].as_bool(),
+        weekly_activity: meter(
+            &data["week_active_progress"]["progress_current"],
+            &data["week_active_progress"]["progress_total"],
+        ),
+        simulated_universe: meter(&data["current_rogue_score"], &data["max_rogue_score"]),
     })
 }

@@ -4,6 +4,7 @@ mod accounts;
 mod battle_records;
 mod community;
 mod gacha;
+mod genshin_wishes;
 mod miyoushe_login;
 mod mumu;
 mod protected;
@@ -36,6 +37,7 @@ fn main() {
             accounts::remove_account,
             accounts::connect_accounts,
             accounts::refresh_accounts,
+            accounts::refresh_account,
             miyoushe_login::start_miyoushe_login,
             miyoushe_login::poll_miyoushe_login,
             miyoushe_login::finish_miyoushe_login,
@@ -43,6 +45,7 @@ fn main() {
             mumu::list_mumu_instances,
             gacha::list_gacha,
             gacha::import_gacha,
+            gacha::sync_genshin_wishes,
             gacha::gacha_page,
         ])
         .run(tauri::generate_context!())

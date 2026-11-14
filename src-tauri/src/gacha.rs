@@ -1,4 +1,7 @@
-use crate::accounts::Game;
+use crate::{
+    accounts::{AccountStore, Game, Role},
+    genshin_wishes,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -9,11 +12,12 @@ use std::{
 };
 use tauri::State;
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Pull {
-    id: String,
+    pub(crate) id: String,
     pool: String,
     name: String,
     rank: Option<u8>,
@@ -55,6 +59,7 @@ pub struct Imported {
 pub struct GachaStore {
     path: PathBuf,
     operation: Mutex<()>,
+    wish_sync: Mutex<()>,
 }
 
 impl GachaStore {
@@ -62,6 +67,7 @@ impl GachaStore {
         Self {
             path: directory.join("gacha.json"),
             operation: Mutex::new(()),
+            wish_sync: Mutex::new(()),
         }
     }
 
@@ -208,11 +214,66 @@ pub async fn import_gacha(
     let parsed = serde_json::from_str(content.trim_start_matches('\u{feff}'))
         .map_err(|_| "无法解析 JSON 文件。")?;
     let (imported, skipped) = parse_export(&parsed)?;
+    merge_archives(&store, imported, skipped).await
+}
+
+#[tauri::command]
+pub async fn sync_genshin_wishes(
+    id: Uuid,
+    accounts: State<'_, AccountStore>,
+    store: State<'_, GachaStore>,
+) -> Result<Imported, String> {
+    sync_wishes(&accounts, &store, id).await
+}
+
+pub(crate) async fn sync_wishes(
+    accounts: &AccountStore,
+    store: &GachaStore,
+    id: Uuid,
+) -> Result<Imported, String> {
+    let _sync = store
+        .wish_sync
+        .try_lock()
+        .map_err(|_| "已有祈愿正在同步，请稍后再试。")?;
+    let (role, credentials) = accounts.linked_session(id).await?;
+    if role.game != Game::Genshin {
+        return Err("同步祈愿适用于已连接米游社的原神账号。".into());
+    }
+    let pulls = genshin_wishes::fetch(&accounts.client, &role, &credentials).await?;
+    let archive = Archive {
+        game: Game::Genshin,
+        uid: role.uid,
+        pulls,
+    };
+    merge_archives(store, vec![archive], 0).await
+}
+
+pub(crate) fn wish_page(role: &Role, rows: &[Value]) -> Result<Vec<Pull>, String> {
+    rows.iter()
+        .map(|row| {
+            if field(&row["uid"], 24).as_deref() != Some(role.uid.as_str()) {
+                return Err("祈愿记录的 UID 与所选角色不一致，同步已停止。".into());
+            }
+            pull(Game::Genshin, row)
+                .filter(|pull| pull.id.bytes().all(|ch| ch.is_ascii_digit()))
+                .ok_or_else(|| "米游社返回了无法识别的祈愿记录，同步已停止。".into())
+        })
+        .collect()
+}
+
+async fn merge_archives(
+    store: &GachaStore,
+    imported: Vec<Archive>,
+    skipped: usize,
+) -> Result<Imported, String> {
     let _guard = store.operation.lock().await;
     let mut archives = store.read()?;
     let mut added = 0;
     let mut duplicates = 0;
-    for incoming in imported {
+    for incoming in imported
+        .into_iter()
+        .filter(|archive| !archive.pulls.is_empty())
+    {
         let archive = match archives
             .iter()
             .position(|entry| entry.game == incoming.game && entry.uid == incoming.uid)
@@ -252,6 +313,34 @@ pub async fn import_gacha(
         duplicates,
         skipped,
     })
+}
+
+#[cfg(test)]
+pub(crate) async fn check_wish_sync(accounts: &AccountStore, id: Uuid) -> (usize, usize) {
+    let directory = tempfile::tempdir().expect("isolated wish archive");
+    let store = GachaStore::new(directory.path());
+    let (role, _) = accounts.linked_session(id).await.expect("read linked role");
+    let imported = serde_json::json!({"hk4e": [{ "uid": role.uid, "list": [{
+        "id": "1", "gacha_type": "301", "name": "本地历史示例", "time": "2020-10-01 00:00:00"
+    }]}]});
+    let (archives, skipped) = parse_export(&imported).expect("parse existing history");
+    merge_archives(&store, archives, skipped)
+        .await
+        .expect("seed local history");
+    let first = sync_wishes(accounts, &store, id)
+        .await
+        .expect("first live wish sync");
+    let second = sync_wishes(accounts, &store, id)
+        .await
+        .expect("second live wish sync");
+    assert_eq!(second.added, 0);
+    assert_eq!(second.duplicates, first.added + first.duplicates);
+    let saved = store.read().expect("read merged wish history");
+    assert_eq!(saved.len(), 1);
+    assert_eq!(saved[0].uid, role.uid);
+    assert_eq!(saved[0].pulls.len(), first.added + 1);
+    assert!(saved[0].pulls.iter().any(|pull| pull.id == "1"));
+    (first.added, second.duplicates)
 }
 
 #[tauri::command]
