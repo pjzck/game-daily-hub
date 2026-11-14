@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ArrowUpDown, CircleAlert, LayoutGrid, Link2, Monitor, Plus, RefreshCw, Sparkles, UsersRound } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { AccountCard, AccountDialog, Modal, NoAccounts } from "./Accounts";
+import { AccountCard, AccountDialog, AccountMemoDialog, Modal, NoAccounts } from "./Accounts";
 import { BattleRecordsDialog } from "./BattleRecords";
 import { Devices } from "./Devices";
 import { Gacha, type GachaTarget } from "./Gacha";
@@ -11,7 +11,8 @@ import "./styles.css";
 
 type View = "accounts" | "devices" | "gacha";
 type FollowFilter = "all" | "followed" | "unfollowed";
-type CardChange = { type: "follow"; followed: boolean } | { type: "swap"; otherId: string };
+type VisibilityFilter = "visible" | "all" | "hidden";
+type CardChange = { type: "follow"; followed: boolean } | { type: "move"; targetId: string } | { type: "visibility"; hidden: boolean };
 const pages = [
   { id: "accounts", title: "账号总览", Icon: LayoutGrid },
   { id: "gacha", title: "抽卡记录", Icon: Sparkles },
@@ -30,21 +31,28 @@ function App() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [filter, setFilter] = useState<Game | "all">("all");
   const [followFilter, setFollowFilter] = useState<FollowFilter>("all");
+  const [visibility, setVisibility] = useState<VisibilityFilter>("visible");
   const [arranging, setArranging] = useState(false);
   const [cardSaving, setCardSaving] = useState(false);
+  const [dragging, setDragging] = useState<string>();
+  const [dropTarget, setDropTarget] = useState<string>();
   const [gachaTarget, setGachaTarget] = useState<GachaTarget | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState<{ id?: string } | null>(null);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<Account | null>();
+  const [memoAccount, setMemoAccount] = useState<Account>();
   const [battleAccount, setBattleAccount] = useState<Account>();
   const [removing, setRemoving] = useState<Account>();
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState("");
   const displayed = accounts.filter(account =>
     (filter === "all" || account.role.game === filter) &&
-    (followFilter === "all" || account.followed === (followFilter === "followed")),
+    (followFilter === "all" || account.followed === (followFilter === "followed")) &&
+    (visibility === "all" || account.hidden === (visibility === "hidden")),
   );
+  const hiddenCount = accounts.filter(account => account.hidden).length;
+  const draggedIndex = displayed.findIndex(account => account.id === dragging);
   const accountBusy = loading || refreshing !== null || cardSaving;
   const linked = accounts.filter(account => account.source === "miyoushe");
   const issues = linked.filter(account => account.issue);
@@ -78,6 +86,7 @@ function App() {
   }
 
   async function updateCard(id: string, change: CardChange) {
+    if (accountBusy) return;
     setCardSaving(true);
     setError("");
     try {
@@ -87,6 +96,11 @@ function App() {
     } finally {
       setCardSaving(false);
     }
+  }
+
+  function endDrag() {
+    setDragging(undefined);
+    setDropTarget(undefined);
   }
 
   function openGacha(account: Account) {
@@ -147,7 +161,7 @@ function App() {
         <div className="section-heading"><h2>账号卡片</h2>
           {accounts.length > 0 && <div className="card-controls">
             <select aria-label="筛选关注状态" value={followFilter} onChange={event => setFollowFilter(event.target.value as FollowFilter)}>
-              <option value="all">全部账号</option>
+              <option value="all">全部关注状态</option>
               <option value="followed">已关注</option>
               <option value="unfollowed">未关注</option>
             </select>
@@ -155,24 +169,58 @@ function App() {
               <option value="all">全部游戏</option>
               {Object.entries(games).map(([key, game]) => <option value={key} key={key}>{game.name}</option>)}
             </select>
+            <select aria-label="筛选卡片显示状态" value={visibility} onChange={event => setVisibility(event.target.value as VisibilityFilter)}>
+              <option value="visible">已显示</option>
+              <option value="all">全部卡片</option>
+              <option value="hidden">仅看隐藏{hiddenCount > 0 ? ` (${hiddenCount})` : ""}</option>
+            </select>
             <button type="button" className="button secondary" aria-pressed={arranging}
-              disabled={!arranging && displayed.length < 2} onClick={() => setArranging(value => !value)}>
+              disabled={accountBusy || (!arranging && displayed.length < 2)} onClick={() => {
+                endDrag();
+                setArranging(value => !value);
+              }}>
               <ArrowUpDown size={16} />{arranging ? "完成排序" : "调整顺序"}
             </button>
           </div>}
         </div>
         {loading ? <p className="notice" role="status">正在读取本地账号…</p> :
           accounts.length === 0 ? <NoAccounts add={() => setEditing(null)} /> :
-          displayed.length === 0 ? <p className="notice">当前筛选下没有账号。</p> :
-          <section className="account-grid" aria-label="账号列表" aria-busy={accountBusy}>
+          displayed.length === 0 ? <div className="notice">当前筛选下没有账号。
+            {visibility === "visible" && hiddenCount > 0 && <button className="text-button" type="button" onClick={() => {
+              setVisibility("hidden");
+              setFilter("all");
+              setFollowFilter("all");
+            }}>查看隐藏卡片</button>}
+          </div> :
+          <section className="account-grid" aria-label="账号列表" aria-busy={accountBusy} onDragLeave={event => {
+            if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
+              setDropTarget(undefined);
+            }
+          }}>
             {displayed.map((account, index) => {
               const move = (neighbor: Account | undefined) => neighbor && (() => {
-                void updateCard(account.id, { type: "swap", otherId: neighbor.id });
+                void updateCard(account.id, { type: "move", targetId: neighbor.id });
               });
               const supportsGameRecords = account.role.uid && (account.role.game === "genshin" || account.role.game === "starrail");
               return <AccountCard key={account.id} account={account} busy={accountBusy} refreshing={refreshing?.id === account.id}
-                order={arranging ? { earlier: move(displayed[index - 1]), later: move(displayed[index + 1]) } : undefined}
+                order={arranging ? {
+                  earlier: move(displayed[index - 1]),
+                  later: move(displayed[index + 1]),
+                  dragging: account.id === dragging,
+                  startDrag: () => setDragging(account.id),
+                  endDrag,
+                  dragOver: draggedIndex >= 0 ? () => setDropTarget(index === draggedIndex ? undefined : account.id) : undefined,
+                  dropPosition: dropTarget === account.id && draggedIndex >= 0 ? (draggedIndex < index ? "after" : "before") : undefined,
+                  drop: source => {
+                    if (source === dragging && source !== account.id) {
+                      void updateCard(source, { type: "move", targetId: account.id });
+                    }
+                    endDrag();
+                  },
+                } : undefined}
                 onFollow={() => { void updateCard(account.id, { type: "follow", followed: !account.followed }); }}
+                onMemo={() => setMemoAccount(account)}
+                onVisibility={() => { void updateCard(account.id, { type: "visibility", hidden: !account.hidden }); }}
                 onEdit={() => setEditing(account)}
                 onRemove={() => { setRemoveError(""); setRemoving(account); }}
                 onRefresh={account.source === "miyoushe" && account.connection ? () => void refresh(account.id) : undefined}
@@ -184,10 +232,15 @@ function App() {
       </>}
     </main>
     {battleAccount && <BattleRecordsDialog key={battleAccount.id} account={battleAccount} close={() => setBattleAccount(undefined)} />}
+    {memoAccount && <AccountMemoDialog account={memoAccount} close={() => setMemoAccount(undefined)} saved={result => {
+      setAccounts(result);
+      setMemoAccount(undefined);
+    }} />}
     {editing !== undefined && <AccountDialog account={editing} close={() => setEditing(undefined)} saved={result => {
       setAccounts(result);
       setFilter("all");
       setFollowFilter("all");
+      if (!editing) setVisibility("visible");
       setError("");
       setEditing(undefined);
     }} />}

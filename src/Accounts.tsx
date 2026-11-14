@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ChevronDown, ChevronUp, CircleAlert, Link2, Pencil, Plus, RefreshCw, ScanLine, Sparkles, Star, Trash2, Trophy, UserRound, X } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { ChevronDown, ChevronUp, CircleAlert, Eye, EyeOff, GripVertical, Link2, Pencil, Plus, RefreshCw, ScanLine, Sparkles, Star, StickyNote, Trash2, Trophy, UserRound, X } from "lucide-react";
+import { useEffect, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from "react";
 import { dateTime, errorMessage, games, type Account, type Game, type Meter } from "./model";
 import { MiyousheQr } from "./MiyousheQr";
 
@@ -22,17 +22,30 @@ function ResourceMeter({ label, meter }: { label: string; meter: Meter | null })
   );
 }
 
-export function AccountCard({ account, busy, refreshing, order, onFollow, onEdit, onRemove, onGacha, onBattle, onRefresh }: {
+interface CardOrder {
+  earlier?: () => void;
+  later?: () => void;
+  dragging: boolean;
+  dropPosition?: "before" | "after";
+  startDrag: () => void;
+  endDrag: () => void;
+  dragOver?: () => void;
+  drop: (source: string) => void;
+}
+
+export function AccountCard({ account, busy, refreshing, order, onFollow, onEdit, onRemove, onGacha, onBattle, onRefresh, onMemo, onVisibility }: {
   account: Account;
   busy: boolean;
   refreshing: boolean;
-  order?: { earlier?: () => void; later?: () => void };
+  order?: CardOrder;
   onFollow: () => void;
   onEdit: () => void;
   onRemove: () => void;
   onGacha?: () => void;
   onBattle?: () => void;
   onRefresh?: () => void;
+  onMemo: () => void;
+  onVisibility: () => void;
 }) {
   const { role, notes, issue } = account;
   const game = games[role.game];
@@ -40,9 +53,30 @@ export function AccountCard({ account, busy, refreshing, order, onFollow, onEdit
   const assignmentLabel = role.game === "genshin" ? "探索派遣" : "委托派遣";
   const status = manual ? "手动记录" : issue ? (notes ? "数据待更新" : "待处理") : "已同步";
   const details = [role.serverName, role.uid && "UID " + role.uid, role.level !== null && "Lv. " + role.level].filter(Boolean);
+
+  function acceptDrop(event: DragEvent<HTMLElement>) {
+    if (!order?.dragOver || busy) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    order.dragOver();
+  }
+
   return (
-    <article className="account-card">
+    <article className="account-card" data-dragging={order?.dragging || undefined}
+      data-drop-position={order?.dropPosition} onDragOver={acceptDrop} onDrop={event => {
+        if (!order?.dragOver || busy) return;
+        event.preventDefault();
+        order.drop(event.dataTransfer.getData("text/plain"));
+      }}>
       <div className="account-heading">
+        {order && !busy && <span className="card-drag-handle" title="拖动卡片调整顺序" draggable
+          onDragStart={event => {
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", account.id);
+            const card = event.currentTarget.closest("article");
+            if (card) event.dataTransfer.setDragImage(card, 24, 24);
+            order.startDrag();
+          }} onDragEnd={order.endDrag}><GripVertical size={17} aria-hidden="true" /></span>}
         <GameMark game={role.game} />
         <div className="account-identity">
           <p className="game-name">{game.name}</p>
@@ -56,6 +90,11 @@ export function AccountCard({ account, busy, refreshing, order, onFollow, onEdit
         </button>
       </div>
       <p className="role-detail">{details.join(" · ") || "未填写区服与 UID"}</p>
+      {account.memo && <button type="button" className="card-memo" onClick={onMemo} disabled={busy}
+        title="编辑备注" aria-label={`编辑备注：${account.memo}`}>
+        <StickyNote size={15} aria-hidden="true" />
+        <span>{account.memo}</span>
+      </button>}
       <div className="account-meters">
         <ResourceMeter label={game.stamina} meter={notes?.stamina ?? null} />
         {notes?.activity && <ResourceMeter label={game.activity} meter={notes.activity} />}
@@ -76,7 +115,7 @@ export function AccountCard({ account, busy, refreshing, order, onFollow, onEdit
         {notes?.simulatedUniverse && <ResourceMeter label="模拟宇宙积分" meter={notes.simulatedUniverse} />}
       </div>
       {issue && <p className="card-issue"><CircleAlert size={15} />{issue}</p>}
-      {(onGacha || onBattle || onRefresh) && <div className="card-links">
+      <div className="card-links">
         {onRefresh && <button type="button" className="text-button" disabled={busy} onClick={onRefresh}
           aria-label={refreshing ? "正在刷新「" + role.name + "」" : "刷新「" + role.name + "」"}>
           <RefreshCw size={15} className={refreshing ? "spin" : undefined} />{refreshing ? "刷新中…" : "刷新"}
@@ -87,7 +126,14 @@ export function AccountCard({ account, busy, refreshing, order, onFollow, onEdit
         {onGacha && <button type="button" className="text-button" onClick={onGacha}>
           <Sparkles size={15} />{role.game === "genshin" ? "祈愿记录" : "跃迁记录"}
         </button>}
-      </div>}
+        {!account.memo && <button type="button" className="text-button" disabled={busy} onClick={onMemo}>
+          <StickyNote size={15} />备注
+        </button>}
+        <button type="button" className="text-button" disabled={busy} onClick={onVisibility}
+          aria-label={`${account.hidden ? "显示" : "隐藏"}「${role.name}」`}>
+          {account.hidden ? <Eye size={15} /> : <EyeOff size={15} />}{account.hidden ? "恢复显示" : "隐藏"}
+        </button>
+      </div>
       <div className="account-footer">
         <div className="small muted">
           <div>{manual ? "本地记录" : "米游社"} · 资料 {dateTime.format(account.profileAt * 1000)}</div>
@@ -148,6 +194,42 @@ export function Modal({ title, busy, close, children }: {
       {children}
     </dialog>
   );
+}
+
+export function AccountMemoDialog({ account, close, saved }: {
+  account: Account;
+  close: () => void;
+  saved: (accounts: Account[]) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const memo = String(new FormData(event.currentTarget).get("memo") ?? "");
+    setError("");
+    setBusy(true);
+    try {
+      saved(await invoke<Account[]>("update_account_card", { id: account.id, change: { type: "memo", memo } }));
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <Modal title={`备注 · ${account.role.name}`} busy={busy} close={close}>
+    <form onSubmit={save} aria-busy={busy}>
+      <label>账号备注<textarea name="memo" className="memo-input" rows={4} maxLength={240}
+        defaultValue={account.memo} disabled={busy} autoFocus placeholder="例如：主号、周末清体力" /></label>
+      {error && <p role="alert" className="notice error">{error}</p>}
+      <div className="dialog-actions">
+        <button type="button" className="button secondary" onClick={close} disabled={busy}>取消</button>
+        <button type="submit" className="button primary" disabled={busy}>保存备注</button>
+      </div>
+    </form>
+  </Modal>;
 }
 
 export function AccountDialog({ account, close, saved }: {

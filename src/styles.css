@@ -15,10 +15,10 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 420px; }
-button, input, select { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled { opacity: .55; cursor: default; }
-button:focus-visible, input:focus-visible, select:focus-visible {
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 2px solid #7265e3;
   outline-offset: 3px;
 }
@@ -131,6 +131,7 @@ nav { display: grid; gap: 5px; }
 .amber { color: #946117; background: #fff4df; }
 .section-heading, .panel-title { display: flex; gap: 12px; justify-content: space-between; align-items: center; }
 .section-heading { margin-bottom: 14px; }
+.section-heading h2 { flex: none; }
 .section-heading select, .panel-title select { max-width: 240px; }
 .card-controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .card-controls .button { white-space: nowrap; }
@@ -166,6 +167,27 @@ nav { display: grid; gap: 5px; }
 .account-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr)); gap: 15px; }
 .account-card, .panel { border: 1px solid var(--border); background: var(--panel); border-radius: 13px; box-shadow: var(--shadow); }
 .account-card { padding: 17px; display: flex; flex-direction: column; min-width: 0; }
+.account-card[data-dragging] { opacity: .5; }
+.account-card[data-drop-position="before"] { box-shadow: 0 -3px 0 var(--primary), var(--shadow); }
+.account-card[data-drop-position="after"] { box-shadow: 0 3px 0 var(--primary), var(--shadow); }
+.card-drag-handle { display: inline-grid; place-items: center; flex: none; color: var(--muted); cursor: grab; }
+.card-drag-handle:active { cursor: grabbing; }
+.card-memo {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 7px 9px;
+  border: 1px solid #ebe8f9;
+  border-radius: 7px;
+  background: #f8f6ff;
+  color: #4c446a;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.card-memo:hover:not(:disabled) { border-color: #c9c3f2; }
+.card-memo span { white-space: pre-wrap; overflow-wrap: anywhere; }
 .account-heading { display: flex; gap: 11px; align-items: center; }
 .follow-button { flex: none; }
 .follow-button[aria-pressed="true"] { color: #93640b; }
@@ -238,8 +260,9 @@ fieldset { margin: 0; padding: 0; border: 0; min-width: 0; display: grid; gap: 1
 .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 label { display: block; color: #474b61; font-size: 12px; font-weight: 650; }
 label > span { color: var(--muted); font-weight: 400; margin-left: 4px; }
-input:not([type="file"]), select { min-height: 36px; border: 1px solid #dddfee; border-radius: 7px; background: #fff; color: var(--ink); padding: 6px 9px; font-size: 13px; }
-label input, label select { display: block; width: 100%; margin-top: 6px; }
+input:not([type="file"]), select, textarea { min-height: 36px; border: 1px solid #dddfee; border-radius: 7px; background: #fff; color: var(--ink); padding: 6px 9px; font-size: 13px; }
+label input, label select, label textarea { display: block; width: 100%; margin-top: 6px; }
+.memo-input { resize: vertical; line-height: 1.6; }
 .dialog .notice { margin: 12px 0 0; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .spin { animation: spin 1.2s linear infinite; }
@@ -263,6 +286,8 @@ label input, label select { display: block; width: 100%; margin-top: 6px; }
   .nav-button { padding-inline: 9px; gap: 6px; font-size: 12px; }
   .main { padding: 23px 15px; }
   .page-header { flex-wrap: wrap; align-items: flex-start; }
+  .section-heading { flex-wrap: wrap; }
+  .card-controls { justify-content: flex-start; }
   .summary-icon { width: 32px; height: 32px; }
   .archive-stat { padding-inline: 7px; }
 }

@@ -80,6 +80,10 @@ pub struct Account {
     pub source: Source,
     #[serde(default = "followed_by_default")]
     pub followed: bool,
+    #[serde(default)]
+    pub memo: String,
+    #[serde(default)]
+    pub hidden: bool,
     pub connection: Option<Uuid>,
     pub profile_at: u64,
     pub notes_at: Option<u64>,
@@ -99,7 +103,10 @@ fn followed_by_default() -> bool {
 )]
 pub enum CardChange {
     Follow { followed: bool },
+    Memo { memo: String },
+    Visibility { hidden: bool },
     Swap { other_id: Uuid },
+    Move { target_id: Uuid },
 }
 
 #[derive(Deserialize)]
@@ -244,12 +251,31 @@ fn update_card(accounts: &mut [Account], id: Uuid, change: CardChange) -> Result
         .ok_or("找不到这张账号卡片。")?;
     match change {
         CardChange::Follow { followed } => accounts[index].followed = followed,
+        CardChange::Memo { memo } => {
+            let memo = memo.trim();
+            if memo.encode_utf16().count() > 240 {
+                return Err("账号备注最多 240 字。".into());
+            }
+            accounts[index].memo = memo.to_owned();
+        }
+        CardChange::Visibility { hidden } => accounts[index].hidden = hidden,
         CardChange::Swap { other_id } => {
             let other = accounts
                 .iter()
                 .position(|entry| entry.id == other_id)
                 .ok_or("找不到要交换的卡片。")?;
             accounts.swap(index, other);
+        }
+        CardChange::Move { target_id } => {
+            let target = accounts
+                .iter()
+                .position(|entry| entry.id == target_id)
+                .ok_or("找不到排序目标卡片。")?;
+            if index < target {
+                accounts[index..=target].rotate_left(1);
+            } else if index > target {
+                accounts[target..=index].rotate_right(1);
+            }
         }
     }
     Ok(())
@@ -296,6 +322,8 @@ pub async fn save_manual_account(
         role,
         source: Source::Manual,
         followed: followed_by_default(),
+        memo: String::new(),
+        hidden: false,
         connection: None,
         profile_at: now(),
         notes_at: input.stamina.as_ref().map(|_| now()),
@@ -314,6 +342,8 @@ pub async fn save_manual_account(
                 .ok_or("找不到要编辑的手动账号。")?;
             *existing = Account {
                 followed: existing.followed,
+                memo: std::mem::take(&mut existing.memo),
+                hidden: existing.hidden,
                 ..account
             };
         }
@@ -536,6 +566,8 @@ async fn apply_roles(
                 role,
                 source: Source::Miyoushe,
                 followed: followed_by_default(),
+                memo: String::new(),
+                hidden: false,
                 connection: Some(connection),
                 profile_at,
                 notes_at: None,
@@ -674,7 +706,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_cards_keep_follow_state_and_order_on_disk() {
+    fn legacy_cards_keep_local_preferences_on_disk() {
         let directory = tempfile::tempdir().unwrap();
         let store = AccountStore::open(directory.path().to_path_buf()).unwrap();
         let role = json!({ "game": "genshin", "uid": "100000001", "server": "cn_gf01", "serverName": "示例", "name": "示例", "level": 10 });
@@ -689,6 +721,12 @@ mod tests {
 
         let mut workspace = store.read().unwrap();
         assert!(workspace.accounts.iter().all(|account| account.followed));
+        assert!(
+            workspace
+                .accounts
+                .iter()
+                .all(|account| !account.hidden && account.memo.is_empty())
+        );
         update_card(
             &mut workspace.accounts,
             ids[0],
@@ -701,16 +739,46 @@ mod tests {
             CardChange::Swap { other_id: ids[2] },
         )
         .unwrap();
+        update_card(
+            &mut workspace.accounts,
+            ids[2],
+            CardChange::Move { target_id: ids[0] },
+        )
+        .unwrap();
+        update_card(
+            &mut workspace.accounts,
+            ids[2],
+            CardChange::Move { target_id: ids[0] },
+        )
+        .unwrap();
+        update_card(
+            &mut workspace.accounts,
+            ids[0],
+            CardChange::Visibility { hidden: true },
+        )
+        .unwrap();
+        update_card(
+            &mut workspace.accounts,
+            ids[0],
+            CardChange::Memo {
+                memo: " 主号\n周末清体力 ".into(),
+            },
+        )
+        .unwrap();
         store.save(workspace).unwrap();
 
-        let saved: Vec<_> = store
-            .read()
-            .unwrap()
-            .accounts
-            .into_iter()
-            .map(|account| (account.id, account.followed))
-            .collect();
-        assert_eq!(saved, [(ids[2], true), (ids[1], true), (ids[0], false)]);
+        let mut saved = store.read().unwrap().accounts;
+        assert_eq!(
+            saved.iter().map(|account| account.id).collect::<Vec<_>>(),
+            [ids[1], ids[2], ids[0]]
+        );
+        assert!(!saved[2].followed);
+        assert!(saved[2].hidden);
+        assert_eq!(saved[2].memo, "主号\n周末清体力");
+        update_card(&mut saved, ids[0], CardChange::Visibility { hidden: false }).unwrap();
+        update_card(&mut saved, ids[0], CardChange::Memo { memo: " ".into() }).unwrap();
+        assert!(!saved[2].hidden);
+        assert!(saved[2].memo.is_empty());
     }
 
     #[test]

@@ -14,6 +14,7 @@
       {
         "label": "main",
         "title": "Game Daily Hub",
+        "dragDropEnabled": false,
         "width": 1130,
         "height": 780,
         "minWidth": 700,
