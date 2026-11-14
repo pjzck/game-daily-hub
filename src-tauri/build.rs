@@ -2,6 +2,8 @@ fn main() {
     let commands = &[
         "list_accounts",
         "get_battle_records",
+        "get_characters",
+        "get_starrail_character",
         "update_account_card",
         "save_manual_account",
         "remove_account",

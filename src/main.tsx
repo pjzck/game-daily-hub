@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { AccountCard, AccountDialog, AccountMemoDialog, Modal, NoAccounts } from "./Accounts";
 import { BattleRecordsDialog } from "./BattleRecords";
+import { CharactersDialog } from "./Characters";
 import { Devices } from "./Devices";
 import { Gacha, type GachaTarget } from "./Gacha";
 import { errorMessage, games, type Account, type Game } from "./model";
@@ -43,6 +44,7 @@ function App() {
   const [editing, setEditing] = useState<Account | null>();
   const [memoAccount, setMemoAccount] = useState<Account>();
   const [battleAccount, setBattleAccount] = useState<Account>();
+  const [characterAccount, setCharacterAccount] = useState<Account>();
   const [removing, setRemoving] = useState<Account>();
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState("");
@@ -202,6 +204,7 @@ function App() {
                 void updateCard(account.id, { type: "move", targetId: neighbor.id });
               });
               const supportsGameRecords = account.role.uid && (account.role.game === "genshin" || account.role.game === "starrail");
+              const linkedGame = supportsGameRecords && account.source === "miyoushe" && account.connection;
               return <AccountCard key={account.id} account={account} busy={accountBusy} refreshing={refreshing?.id === account.id}
                 order={arranging ? {
                   earlier: move(displayed[index - 1]),
@@ -225,13 +228,14 @@ function App() {
                 onRemove={() => { setRemoveError(""); setRemoving(account); }}
                 onRefresh={account.source === "miyoushe" && account.connection ? () => void refresh(account.id) : undefined}
                 onGacha={supportsGameRecords ? () => openGacha(account) : undefined}
-                onBattle={supportsGameRecords && account.source === "miyoushe" && account.connection
-                  ? () => setBattleAccount(account) : undefined} />;
+                onBattle={linkedGame ? () => setBattleAccount(account) : undefined}
+                onCharacters={linkedGame ? () => setCharacterAccount(account) : undefined} />;
             })}
           </section>}
       </>}
     </main>
     {battleAccount && <BattleRecordsDialog key={battleAccount.id} account={battleAccount} close={() => setBattleAccount(undefined)} />}
+    {characterAccount && <CharactersDialog key={characterAccount.id} account={characterAccount} close={() => setCharacterAccount(undefined)} />}
     {memoAccount && <AccountMemoDialog account={memoAccount} close={() => setMemoAccount(undefined)} saved={result => {
       setAccounts(result);
       setMemoAccount(undefined);

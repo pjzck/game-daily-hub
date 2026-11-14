@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ChevronDown, ChevronUp, CircleAlert, Eye, EyeOff, GripVertical, Link2, Pencil, Plus, RefreshCw, ScanLine, Sparkles, Star, StickyNote, Trash2, Trophy, UserRound, X } from "lucide-react";
+import { ChevronDown, ChevronUp, CircleAlert, Eye, EyeOff, GripVertical, Link2, Pencil, Plus, RefreshCw, ScanLine, Sparkles, Star, StickyNote, Trash2, Trophy, UserRound, UsersRound, X } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from "react";
 import { dateTime, errorMessage, games, type Account, type Game, type Meter } from "./model";
 import { MiyousheQr } from "./MiyousheQr";
@@ -33,7 +33,7 @@ interface CardOrder {
   drop: (source: string) => void;
 }
 
-export function AccountCard({ account, busy, refreshing, order, onFollow, onEdit, onRemove, onGacha, onBattle, onRefresh, onMemo, onVisibility }: {
+export function AccountCard({ account, busy, refreshing, order, onFollow, onEdit, onRemove, onGacha, onBattle, onCharacters, onRefresh, onMemo, onVisibility }: {
   account: Account;
   busy: boolean;
   refreshing: boolean;
@@ -43,6 +43,7 @@ export function AccountCard({ account, busy, refreshing, order, onFollow, onEdit
   onRemove: () => void;
   onGacha?: () => void;
   onBattle?: () => void;
+  onCharacters?: () => void;
   onRefresh?: () => void;
   onMemo: () => void;
   onVisibility: () => void;
@@ -123,6 +124,9 @@ export function AccountCard({ account, busy, refreshing, order, onFollow, onEdit
         {onBattle && <button type="button" className="text-button" onClick={onBattle}>
           <Trophy size={15} />战绩
         </button>}
+        {onCharacters && <button type="button" className="text-button" onClick={onCharacters}>
+          <UsersRound size={15} />角色
+        </button>}
         {onGacha && <button type="button" className="text-button" onClick={onGacha}>
           <Sparkles size={15} />{role.game === "genshin" ? "祈愿记录" : "跃迁记录"}
         </button>}
@@ -173,8 +177,8 @@ export function EmptyState({ icon, title, detail, action }: {
   );
 }
 
-export function Modal({ title, busy, close, children }: {
-  title: string; busy: boolean; close: () => void; children: ReactNode;
+export function Modal({ title, busy, close, children, className = "" }: {
+  title: string; busy: boolean; close: () => void; children: ReactNode; className?: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -183,7 +187,7 @@ export function Modal({ title, busy, close, children }: {
     return () => element?.close();
   }, []);
   return (
-    <dialog ref={dialog} aria-label={title} className="dialog" onCancel={(event) => {
+    <dialog ref={dialog} aria-label={title} className={`dialog ${className}`.trimEnd()} onCancel={(event) => {
       event.preventDefault();
       if (!busy) close();
     }}>

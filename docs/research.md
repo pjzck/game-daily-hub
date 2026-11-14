@@ -139,4 +139,17 @@
 | PC 游戏内的历史页 | 原神和崩铁。进入对应角色的祈愿或跃迁历史后，从游戏自己的网页缓存或日志读取临时记录链接，也可使用已有链接 | AuroraExport 有 Windows 实现。本轮未在本机读取游戏缓存或用崩铁链接验证；已核对的米游社扫码方案只支持原神国服 |
 | UIGF／SRGF 导出文件 | 原神和崩铁。用已有工具导出 JSON，导入现有抽卡页面 | 桌面端已支持，能合并已有长期存档 |
 
-原神账号档案已提供「同步祈愿」，读取角色、武器、集录、常驻和新手祈愿。同步结果按游戏和 UID 归档，逐页校验返回的 UID，再用记录 ID 去重。真实账号在临时档案首次读到 712 条，第二次新增 0 条，导入的旧记录保留。历史只覆盖服务端当前可查区间，临时授权仅用于本次读取。崩铁 PC 游戏历史同步仍待验证。[原神扫码授权实现](https://github.com/android-tool-suite/plugin-gacha-analysis/blob/main/src/web/mihoyo.js) · [PC 取数实现](https://github.com/QWERTY770/AuroraExport/blob/main/src/urltools.rs) · [UIGF 标准](https://uigf.org/zh/standards/uigf.html)
+原神账号档案已提供「同步祈愿」，读取角色、武器、集录、常驻和新手祈愿。同步结果按游戏和 UID 归档，逐页校验返回的 UID，再用记录 ID 去重。真实账号在临时档案首次读到 712 条，第二次新增 0 条，导入的旧记录保留。崩铁账号档案已提供「同步跃迁」，从 PC 客户端历史页产生的本机缓存读取短期授权，实测首次读取 1,071 条，重复同步新增 0 条，所有记录的 UID 均与所选账号一致。两款游戏的在线同步都覆盖服务端当前可查区间，临时授权仅用于本次读取。[原神扫码授权实现](https://github.com/android-tool-suite/plugin-gacha-analysis/blob/main/src/web/mihoyo.js) · [PC 取数实现](https://github.com/QWERTY770/AuroraExport/blob/main/src/urltools.rs) · [UIGF 标准](https://uigf.org/zh/standards/uigf.html)
+
+## 已拥有角色与战绩安全验证（2026-11-14）
+
+使用已有的米游社扫码会话，对两款游戏各两张已绑定卡片运行只读探测。两款养成计算器均返回了各自账号的角色数据，四次列表查询都返回成功，未要求验证。探测未写入账号数据。
+
+| 游戏 | 已实测的入口 | 已确认返回的字段 |
+| --- | --- | --- |
+| 原神 | 养成计算器 `POST /event/e20200928calculate/v1/sync/avatar/list` | 已拥有角色、等级、突破、命座、好感、武器名称和等级、天赋等级。圣遗物字段包含名称、部位和等级 |
+| 崩铁 | 养成计算器 `GET /event/rpgcalc/avatar/list`（`TabOwned`）及 `GET /event/rpgcalc/avatar/detail` | 已拥有角色、等级、星魂、首次获得时间。各账号抽查一名角色的详情，行迹均可获取，装备了光锥的样本还返回了光锥名称和等级。详情没有返回遗器词条 |
+
+崩铁另一个 `rpgcultivate/avatar/list` 入口在探测中返回了图鉴和未登录标记。角色页使用 `TabOwned` 并检查 `is_login`，刷新时按所选账号的 UID 与区服查询。崩铁光锥与行迹在选中角色后加载，详情通过返回的角色 ID 校验。未发现养成计算器具备供第三方长期使用的公开接口契约。[原神官方工具入口](https://act.miyoushe.com/puzzle/bbs/pz_ys5M3WP6KK/index.html?mhy_presentation_style=fullscreen) · [崩铁官方工具入口](https://act.miyoushe.com/puzzle/bbs/pz_vW14KdFyYw/index.html) · [MiTool 请求记录](https://github.com/CainLuo/MiTool/blob/main/API-Document.md)
+
+养成工具无法提供战绩和探索度查询。战绩接口遇到原神 `1034` 或崩铁 `10035` 时，可让用户打开官方战绩页并按提示完成验证，再回桌面端手动重试。当前尚未实测官方页面完成的验证能否在桌面端扫码会话生效。公开展柜可以补充用户公开的少量配装。[原神战绩验证码记录](https://github.com/daidr/paimon-webext/issues/29) · [崩铁验证处理说明](https://github.com/Anyrainel/GGStarRail/blob/main/docs/account-imports.md) · [Enka 展柜](https://enka.network/)

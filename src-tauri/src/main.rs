@@ -2,6 +2,7 @@
 
 mod accounts;
 mod battle_records;
+mod characters;
 mod community;
 mod gacha;
 mod genshin_wishes;
@@ -33,6 +34,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             accounts::list_accounts,
             accounts::get_battle_records,
+            characters::get_characters,
+            characters::get_starrail_character,
             accounts::update_account_card,
             accounts::save_manual_account,
             accounts::remove_account,
