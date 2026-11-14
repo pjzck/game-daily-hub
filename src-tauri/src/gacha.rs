@@ -1,6 +1,6 @@
 use crate::{
     accounts::{AccountStore, Game, Role},
-    genshin_wishes,
+    genshin_wishes, starrail_warps,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -59,7 +59,7 @@ pub struct Imported {
 pub struct GachaStore {
     path: PathBuf,
     operation: Mutex<()>,
-    wish_sync: Mutex<()>,
+    online_sync: Mutex<()>,
 }
 
 impl GachaStore {
@@ -67,7 +67,7 @@ impl GachaStore {
         Self {
             path: directory.join("gacha.json"),
             operation: Mutex::new(()),
-            wish_sync: Mutex::new(()),
+            online_sync: Mutex::new(()),
         }
     }
 
@@ -232,7 +232,7 @@ pub(crate) async fn sync_wishes(
     id: Uuid,
 ) -> Result<Imported, String> {
     let _sync = store
-        .wish_sync
+        .online_sync
         .try_lock()
         .map_err(|_| "已有祈愿正在同步，请稍后再试。")?;
     let (role, credentials) = accounts.linked_session(id).await?;
@@ -248,15 +248,54 @@ pub(crate) async fn sync_wishes(
     merge_archives(store, vec![archive], 0).await
 }
 
+#[tauri::command]
+pub async fn sync_starrail_warps(
+    uid: String,
+    accounts: State<'_, AccountStore>,
+    store: State<'_, GachaStore>,
+) -> Result<Imported, String> {
+    sync_warps(&accounts.client, &store, &uid).await
+}
+
+async fn sync_warps(
+    client: &reqwest::Client,
+    store: &GachaStore,
+    uid: &str,
+) -> Result<Imported, String> {
+    if uid.is_empty() || uid.len() > 24 || !uid.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err("请选择有效的崩铁 UID。".into());
+    }
+    let _sync = store
+        .online_sync
+        .try_lock()
+        .map_err(|_| "已有抽卡记录正在同步，请稍后再试。")?;
+    let history = tauri::async_runtime::spawn_blocking(starrail_warps::find_history)
+        .await
+        .map_err(|_| "无法读取崩铁客户端的跃迁历史缓存。")??;
+    let pulls = starrail_warps::fetch(client, &history, uid).await?;
+    let archive = Archive {
+        game: Game::Starrail,
+        uid: uid.to_owned(),
+        pulls,
+    };
+    merge_archives(store, vec![archive], 0).await
+}
+
 pub(crate) fn wish_page(role: &Role, rows: &[Value]) -> Result<Vec<Pull>, String> {
+    online_page(Game::Genshin, &role.uid, rows)
+}
+
+pub(crate) fn online_page(game: Game, uid: &str, rows: &[Value]) -> Result<Vec<Pull>, String> {
     rows.iter()
         .map(|row| {
-            if field(&row["uid"], 24).as_deref() != Some(role.uid.as_str()) {
-                return Err("祈愿记录的 UID 与所选角色不一致，同步已停止。".into());
+            if field(&row["uid"], 24).as_deref() != Some(uid) {
+                return Err(
+                    "抽卡记录的 UID 与所选账号不一致，请在游戏中打开正确账号的历史记录。".into(),
+                );
             }
-            pull(Game::Genshin, row)
+            pull(game, row)
                 .filter(|pull| pull.id.bytes().all(|ch| ch.is_ascii_digit()))
-                .ok_or_else(|| "米游社返回了无法识别的祈愿记录，同步已停止。".into())
+                .ok_or_else(|| "接口返回了无法识别的抽卡记录，同步已停止。".into())
         })
         .collect()
 }
@@ -372,4 +411,40 @@ pub async fn gacha_page(
         rows: matching().skip(offset).take(50).cloned().collect(),
         total: matching().count(),
     })
+}
+
+#[cfg(test)]
+mod starrail_tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "requires an open Star Rail PC warp history and uses the official live service"]
+    fn live_starrail_warp_sync() {
+        tauri::async_runtime::block_on(async {
+            let directory = tempfile::tempdir().expect("temporary data directory");
+            let accounts = AccountStore::open(directory.path().into()).expect("HTTP client");
+            let store = GachaStore::new(directory.path());
+            let uid = starrail_warps::current_uid(&accounts.client)
+                .await
+                .expect("live history record UID");
+            let first = sync_warps(&accounts.client, &store, &uid)
+                .await
+                .expect("first live warp sync");
+            assert!(first.added > 0, "test requires at least one warp record");
+            let second = sync_warps(&accounts.client, &store, &uid)
+                .await
+                .expect("repeat live warp sync");
+            assert_eq!(second.added, 0, "repeat sync must not duplicate records");
+            assert!(second.duplicates >= first.added);
+            let archives = store.read().expect("persisted warp archive");
+            assert!(
+                archives.len() == 1 && archives[0].game == Game::Starrail && archives[0].uid == uid
+            );
+            assert_eq!(archives[0].pulls.len(), first.added);
+            println!(
+                "Star Rail: {} saved, {} duplicates on repeat, all pages matched the selected UID",
+                first.added, second.duplicates
+            );
+        });
+    }
 }

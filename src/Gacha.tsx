@@ -61,10 +61,18 @@ export function Gacha({ accounts, target }: { accounts: Account[]; target: Gacha
     const entry: GachaTarget = { game: "genshin", uid: role.uid };
     choices.set(archiveKey(entry), entry);
   }
+  for (const { role } of accounts) {
+    if (role.game === "starrail" && role.uid) {
+      const entry: GachaTarget = { game: "starrail", uid: role.uid };
+      choices.set(archiveKey(entry), entry);
+    }
+  }
   if (target) choices.set(archiveKey(target), target);
   const shown = choices.get(selected) ?? choices.values().next().value;
   const archive = shown && archives.find(entry => archiveKey(entry) === archiveKey(shown));
   const syncAccount = shown?.game === "genshin" ? linkedGenshin.find(account => account.role.uid === shown.uid) : undefined;
+  const syncStarrail = shown?.game === "starrail";
+  const canSync = Boolean(syncAccount || syncStarrail);
 
   useEffect(() => {
     void invoke<Archive[]>("list_gacha").then(setArchives).catch(reason => setError(errorMessage(reason)))
@@ -113,14 +121,16 @@ export function Gacha({ accounts, target }: { accounts: Account[]; target: Gacha
     }
   }
 
-  async function syncWishes() {
-    if (!syncAccount || syncing || importing) return;
-    setSelected(archiveKey({ game: "genshin", uid: syncAccount.role.uid }));
+  async function syncHistory() {
+    if (!shown || !canSync || syncing || importing) return;
+    setSelected(archiveKey(shown));
     setSyncing(true);
     setError("");
     setNotice("");
     try {
-      const result = await invoke<ImportResult>("sync_genshin_wishes", { id: syncAccount.id });
+      const result = syncAccount
+        ? await invoke<ImportResult>("sync_genshin_wishes", { id: syncAccount.id })
+        : await invoke<ImportResult>("sync_starrail_warps", { uid: shown.uid });
       setArchives(result.archives);
       setPool("");
       setOffset(0);
@@ -145,10 +155,10 @@ export function Gacha({ accounts, target }: { accounts: Account[]; target: Gacha
       <div><h1>抽卡记录</h1><p className="muted">原神祈愿与崩铁跃迁</p></div>
       <input type="file" accept=".json,application/json" ref={picker} onChange={importFile} hidden />
       <div className="page-actions">
-        {syncAccount && <button className="button primary" onClick={syncWishes} disabled={syncing || importing || loading}>
-          <RefreshCw size={17} className={syncing ? "spin" : undefined} />{syncing ? "同步中…" : "同步祈愿"}
+        {canSync && <button className="button primary" onClick={syncHistory} disabled={syncing || importing || loading}>
+          <RefreshCw size={17} className={syncing ? "spin" : undefined} />{syncing ? "同步中…" : syncStarrail ? "同步跃迁" : "同步祈愿"}
         </button>}
-        <button className={"button " + (syncAccount ? "secondary" : "primary")} onClick={() => picker.current?.click()} disabled={importing || syncing || loading}>
+        <button className={"button " + (canSync ? "secondary" : "primary")} onClick={() => picker.current?.click()} disabled={importing || syncing || loading}>
           <Upload size={17} />{importing ? "导入中…" : "导入记录"}
         </button>
       </div>
@@ -199,8 +209,10 @@ export function Gacha({ accounts, target }: { accounts: Account[]; target: Gacha
           </div>
         </div>
     ) : <EmptyState icon={<Sparkles size={29} />}
-      title={loading ? "正在读取记录" : syncing ? "正在同步祈愿" : shown ? "该账号还没有抽卡记录" : "还没有抽卡记录"}
-      detail={loading || syncing ? undefined : syncAccount
+      title={loading ? "正在读取记录" : syncing ? "正在同步抽卡记录" : shown ? "该账号还没有抽卡记录" : "还没有抽卡记录"}
+      detail={loading || syncing ? undefined : syncStarrail
+        ? "在崩铁 PC 客户端打开对应账号的跃迁历史并等列表加载，然后点「同步跃迁」。"
+        : syncAccount
         ? "可同步米游社授权的祈愿历史，也可导入 UIGF 档案。"
         : "选择原神 UIGF 或崩铁 UIGF／SRGF 的 JSON 导出文件。"} />}
   </>;

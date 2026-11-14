@@ -16,6 +16,7 @@ fn main() {
         "list_gacha",
         "import_gacha",
         "sync_genshin_wishes",
+        "sync_starrail_warps",
         "gacha_page",
     ];
     tauri_build::try_build(

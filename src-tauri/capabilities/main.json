@@ -20,6 +20,7 @@
     "allow-list-gacha",
     "allow-import-gacha",
     "allow-sync-genshin-wishes",
+    "allow-sync-starrail-warps",
     "allow-gacha-page"
   ]
 }

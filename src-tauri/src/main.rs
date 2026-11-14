@@ -8,6 +8,7 @@ mod genshin_wishes;
 mod miyoushe_login;
 mod mumu;
 mod protected;
+mod starrail_warps;
 
 use tauri::Manager;
 
@@ -46,6 +47,7 @@ fn main() {
             gacha::list_gacha,
             gacha::import_gacha,
             gacha::sync_genshin_wishes,
+            gacha::sync_starrail_warps,
             gacha::gacha_page,
         ])
         .run(tauri::generate_context!())
