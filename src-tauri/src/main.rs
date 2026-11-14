@@ -47,6 +47,7 @@ fn main() {
             miyoushe_login::finish_miyoushe_login,
             miyoushe_login::cancel_miyoushe_login,
             mumu::list_mumu_instances,
+            mumu::start_mumu_instance,
             gacha::list_gacha,
             gacha::import_gacha,
             gacha::sync_genshin_wishes,

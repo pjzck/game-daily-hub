@@ -266,6 +266,7 @@ th { color: #686c82; font-size: 12px; font-weight: 650; background: #f9f9fd; }
 td, th { padding: 13px 19px; border-bottom: 1px solid #eceef5; }
 tbody tr:last-child td { border-bottom: 0; }
 .table-device { display: flex; align-items: center; gap: 10px; }
+.device-start { width: max-content; min-height: 32px; padding: 5px 9px; font-size: 13px; }
 .device-mark { display: grid; place-items: center; color: #5748c4; background: #efedff; border-radius: 9px; width: 35px; height: 35px; }
 .archive-header { display: flex; gap: 14px; align-items: center; padding: 15px 18px; margin-bottom: 15px; }
 .archive-header label { flex: 1; min-width: 0; }

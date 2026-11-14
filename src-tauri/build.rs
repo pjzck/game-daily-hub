@@ -15,6 +15,7 @@ fn main() {
         "finish_miyoushe_login",
         "cancel_miyoushe_login",
         "list_mumu_instances",
+        "start_mumu_instance",
         "list_gacha",
         "import_gacha",
         "sync_genshin_wishes",
