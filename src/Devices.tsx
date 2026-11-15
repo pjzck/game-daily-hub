@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Monitor, Play, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { EmptyState } from "./Accounts";
+import { AutomationTools } from "./AutomationTools";
 import { dateTime, errorMessage } from "./model";
 
 type Status = "running" | "starting" | "stopped" | "unknown" | "error";
@@ -24,7 +25,8 @@ const statuses: Record<Status, [string, string]> = {
 export function Devices() {
   const [rows, setRows] = useState<Instance[]>([]);
   const [busy, setBusy] = useState(true);
-  const [starting, setStarting] = useState<number>();
+  const [starting, setStarting] = useState<ReadonlySet<number>>(() => new Set());
+  const [startErrors, setStartErrors] = useState<Record<number, string>>({});
   const [updated, setUpdated] = useState<number>();
   const [error, setError] = useState("");
 
@@ -38,6 +40,7 @@ export function Devices() {
     setError("");
     try {
       await readInstances();
+      setStartErrors({});
     } catch (reason) {
       setError(errorMessage(reason) + (rows.length > 0 ? " 已保留上次列表。" : ""));
     } finally {
@@ -45,21 +48,33 @@ export function Devices() {
     }
   }
 
+  function updateInstance(instance: Instance) {
+    setRows(current => current.map(row => row.index === instance.index ? instance : row));
+    setUpdated(Date.now());
+  }
+
   async function start(row: Instance) {
-    setStarting(row.index);
-    setError("");
+    const { index, name } = row;
+    setStarting(current => new Set(current).add(index));
+    setStartErrors(current => ({ ...current, [index]: "" }));
     try {
-      setRows(await invoke<Instance[]>("start_mumu_instance", { index: row.index, name: row.name }));
-      setUpdated(Date.now());
+      updateInstance(await invoke<Instance>("start_mumu_instance", { index, name }));
     } catch (reason) {
-      setError(errorMessage(reason));
+      let message = errorMessage(reason);
       try {
-        await readInstances();
+        const latest = await invoke<Instance[]>("list_mumu_instances");
+        const instance = latest.find(entry => entry.index === index && entry.name === name);
+        if (instance) updateInstance(instance);
       } catch {
-        setError(message => message + " 状态读取失败，已保留上次列表。");
+        message += " 暂时无法读取最新状态。";
       }
+      setStartErrors(current => ({ ...current, [index]: message }));
     } finally {
-      setStarting(undefined);
+      setStarting(current => {
+        const next = new Set(current);
+        next.delete(index);
+        return next;
+      });
     }
   }
 
@@ -68,7 +83,7 @@ export function Devices() {
   return <>
     <header className="page-header">
       <div><h1>MuMu 实例</h1><p className="muted">{updated ? "上次读取 " + dateTime.format(updated) : "本机模拟器"}</p></div>
-      <button className="button primary" onClick={refresh} disabled={busy || starting !== undefined}>
+      <button className="button primary" onClick={refresh} disabled={busy || starting.size > 0}>
         <RefreshCw size={17} className={busy ? "spin" : ""} />{busy ? "读取中…" : "刷新实例"}
       </button>
     </header>
@@ -80,17 +95,22 @@ export function Devices() {
       <table>
         <thead><tr><th>实例</th><th>Android</th><th>ADB 地址</th><th>状态</th><th>操作</th></tr></thead>
         <tbody>{rows.map(row => {
-          const [label, tone] = statuses[starting === row.index ? "starting" : row.status];
+          const isStarting = starting.has(row.index);
+          const [label, tone] = statuses[isStarting ? "starting" : row.status];
+          const startError = startErrors[row.index];
           return <tr key={row.index}>
             <td><div className="table-device"><span className="device-mark"><Monitor size={18} /></span>
               <div><strong>{row.name}</strong><div className="small muted">实例 {row.index}</div></div></div></td>
             <td>{row.androidVersion ?? "—"}</td>
             <td className="mono">{row.adb ?? "—"}</td>
-            <td><span className={"status-pill " + tone} role="status">{label}</span></td>
+            <td>
+              <span className={"status-pill " + tone} role="status">{label}</span>
+              {startError && <p className="small device-start-error" role="alert">{startError}</p>}
+            </td>
             <td>{row.canStart && <button type="button" className="button secondary device-start"
-              disabled={busy || starting !== undefined} aria-label={`启动「${row.name}」`}
+              disabled={busy || isStarting} aria-label={`启动「${row.name}」`}
               onClick={() => void start(row)}>
-              {starting === row.index ? <RefreshCw size={15} className="spin" /> : <Play size={15} />}
+              {isStarting ? <RefreshCw size={15} className="spin" /> : <Play size={15} />}
               启动
             </button>}</td>
           </tr>;
@@ -98,5 +118,6 @@ export function Devices() {
       </table>
     </div> : <EmptyState icon={<Monitor size={29} />}
       title={busy ? "正在读取实例" : error ? "暂时无法读取实例" : "没有找到实例"} />}
+    <AutomationTools />
   </>;
 }

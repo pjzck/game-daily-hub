@@ -2,13 +2,45 @@ use serde::Serialize;
 use serde_json::Value;
 #[cfg(windows)]
 use std::{
+    collections::HashSet,
     path::{Path, PathBuf},
     process::Output,
+    sync::{LazyLock, Mutex},
     time::Duration,
 };
 
 #[cfg(windows)]
-static STARTING_INSTANCE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+static STARTING_INSTANCES: LazyLock<Mutex<HashSet<u32>>> = LazyLock::new(Mutex::default);
+
+#[cfg(windows)]
+struct StartingInstance<'a> {
+    instances: &'a Mutex<HashSet<u32>>,
+    index: u32,
+}
+
+#[cfg(windows)]
+impl<'a> StartingInstance<'a> {
+    fn acquire(instances: &'a Mutex<HashSet<u32>>, index: u32) -> Result<Self, String> {
+        if !instances
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .insert(index)
+        {
+            return Err("该 MuMu 实例正在启动。".into());
+        }
+        Ok(Self { instances, index })
+    }
+}
+
+#[cfg(windows)]
+impl Drop for StartingInstance<'_> {
+    fn drop(&mut self) {
+        self.instances
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .remove(&self.index);
+    }
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,19 +64,17 @@ pub async fn list_mumu_instances() -> Result<Vec<Instance>, String> {
 }
 
 #[tauri::command]
-pub async fn start_mumu_instance(index: u32, name: String) -> Result<Vec<Instance>, String> {
+pub async fn start_mumu_instance(index: u32, name: String) -> Result<Instance, String> {
     #[cfg(windows)]
     {
-        let _start = STARTING_INSTANCE
-            .try_lock()
-            .map_err(|_| "已有 MuMu 实例正在启动。")?;
+        let _start = StartingInstance::acquire(&STARTING_INSTANCES, index)?;
         let (manager, instances) = resolve_installation().await?;
-        let instance = find_instance(&instances, index)?;
+        let instance = find_instance(instances, index)?;
         if instance.name != name {
             return Err("MuMu 实例已变化，请刷新列表后重试。".into());
         }
         match instance.status {
-            "running" => return Ok(instances),
+            "running" => return Ok(instance),
             "starting" => {}
             _ if instance.can_start => launch(&manager, index).await?,
             _ => return Err("无法确认该实例已停止，请在 MuMu 中检查后刷新。".into()),
@@ -75,9 +105,9 @@ async fn resolve_installation() -> Result<(PathBuf, Vec<Instance>), String> {
 }
 
 #[cfg(windows)]
-fn find_instance(instances: &[Instance], index: u32) -> Result<&Instance, String> {
+fn find_instance(instances: Vec<Instance>, index: u32) -> Result<Instance, String> {
     instances
-        .iter()
+        .into_iter()
         .find(|instance| instance.index == index)
         .ok_or_else(|| "找不到该 MuMu 实例，请刷新列表。".into())
 }
@@ -215,14 +245,15 @@ fn check_launch_reply(bytes: &[u8]) -> Result<(), String> {
 }
 
 #[cfg(windows)]
-async fn wait_for_android(path: &Path, index: u32) -> Result<Vec<Instance>, String> {
+async fn wait_for_android(path: &Path, index: u32) -> Result<Instance, String> {
     loop {
         tokio::time::sleep(Duration::from_secs(2)).await;
         let instances = query(path)
             .await
             .map_err(|reason| format!("已发出启动请求。{reason}"))?;
-        match find_instance(&instances, index)?.status {
-            "running" => return Ok(instances),
+        let instance = find_instance(instances, index)?;
+        match instance.status {
+            "running" => return Ok(instance),
             "error" => return Err("MuMu 实例报告启动异常，请在模拟器中检查。".into()),
             _ => {}
         }
@@ -302,6 +333,21 @@ fn parse_instances(bytes: &[u8]) -> Result<Vec<Instance>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn different_instances_can_start_while_duplicate_requests_are_rejected() {
+        let instances = Mutex::default();
+        let first = StartingInstance::acquire(&instances, 0).unwrap();
+        let second = StartingInstance::acquire(&instances, 1).unwrap();
+        assert!(StartingInstance::acquire(&instances, 0).is_err());
+        assert!(StartingInstance::acquire(&instances, 1).is_err());
+        drop(first);
+        assert!(StartingInstance::acquire(&instances, 0).is_ok());
+        assert!(StartingInstance::acquire(&instances, 1).is_err());
+        drop(second);
+        assert!(StartingInstance::acquire(&instances, 1).is_ok());
+    }
 
     #[test]
     fn launch_reply_checks_manager_errors_even_when_the_command_exited_normally() {
