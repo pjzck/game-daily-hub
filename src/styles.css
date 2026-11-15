@@ -72,6 +72,7 @@ nav { display: grid; gap: 5px; }
 }
 .nav-button:hover { background: #f0effa; color: #4334ab; }
 .nav-button[aria-current] { color: #4436ae; background: #edeaff; }
+.nav-count { margin-left: auto; border-radius: 999px; padding: 1px 7px; color: #83500c; background: #f9e8b5; font-size: 12px; }
 .sidebar-footer { margin-top: auto; display: flex; gap: 8px; align-items: center; padding-left: 13px; font-size: 12px; color: var(--muted); }
 .indicator { width: 7px; height: 7px; background: #46a890; border-radius: 50%; }
 .main { width: 100%; max-width: 1460px; margin-inline: auto; padding: 36px 32px; min-width: 0; }
@@ -267,6 +268,26 @@ td, th { padding: 13px 19px; border-bottom: 1px solid #eceef5; }
 tbody tr:last-child td { border-bottom: 0; }
 .table-device { display: flex; align-items: center; gap: 10px; }
 .device-start { width: max-content; min-height: 32px; padding: 5px 9px; font-size: 13px; }
+.device-start-error { max-width: 20ch; margin-top: 5px; color: #9f3746; }
+.automation-tools { margin-top: 18px; }
+.automation-tools .notice { margin: 12px 19px 0; }
+.automation-tool-list { list-style: none; margin: 0; padding: 2px 19px; }
+.automation-tool-list > li { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center; padding: 10px 0; }
+.automation-tool-list > li + li { border-top: 1px solid var(--border); }
+.automation-tool-actions { display: flex; align-items: center; gap: 8px; }
+.automation-tool-note { grid-column: 1 / -1; max-width: none; margin-left: 45px; }
+.notice.warning, .notice.reminder-notice { color: #75490b; background: #fffaed; border-color: #f2dfa7; }
+.notice.reminder-notice { display: flex; align-items: center; gap: 10px; }
+.reminder-notice div { flex: 1; min-width: 0; }
+.reminder-notice .text-button { white-space: nowrap; }
+.reminder-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.reminder-list { margin-bottom: 14px; }
+.reminder-list ul { margin: 0; padding: 0; list-style: none; }
+.reminder-list li { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+.reminder-list li + li { border-top: 1px solid var(--border); }
+.reminder-list .game-mark { flex: none; width: 32px; height: 32px; font-size: 15px; }
+.reminder-entry { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.reminder-time { flex: none; text-align: right; white-space: nowrap; }
 .device-mark { display: grid; place-items: center; color: #5748c4; background: #efedff; border-radius: 9px; width: 35px; height: 35px; }
 .archive-header { display: flex; gap: 14px; align-items: center; padding: 15px 18px; margin-bottom: 15px; }
 .archive-header label { flex: 1; min-width: 0; }

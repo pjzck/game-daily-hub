@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Local account and MuMu commands",
+  "description": "Local account, MuMu and assistant commands",
   "windows": ["main"],
   "permissions": [
     "allow-list-accounts",
@@ -20,6 +20,9 @@
     "allow-cancel-miyoushe-login",
     "allow-list-mumu-instances",
     "allow-start-mumu-instance",
+    "allow-list-automation-tools",
+    "allow-launch-automation-tool",
+    "allow-fetch-reminders",
     "allow-list-gacha",
     "allow-import-gacha",
     "allow-sync-genshin-wishes",

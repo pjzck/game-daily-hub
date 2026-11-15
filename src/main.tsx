@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ArrowUpDown, CircleAlert, LayoutGrid, Link2, Monitor, Plus, RefreshCw, Sparkles, UsersRound } from "lucide-react";
+import { ArrowUpDown, Bell, CircleAlert, LayoutGrid, Link2, Monitor, Plus, RefreshCw, Sparkles, UsersRound } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { AccountCard, AccountDialog, AccountMemoDialog, Modal, NoAccounts } from "./Accounts";
@@ -7,17 +7,19 @@ import { BattleRecordsDialog } from "./BattleRecords";
 import { CharactersDialog } from "./Characters";
 import { Devices } from "./Devices";
 import { Gacha, type GachaTarget } from "./Gacha";
+import { ReminderNotice, RemindersPage, useReminders } from "./Reminders";
 import { errorMessage, games, type Account, type Game } from "./model";
 import "./styles.css";
 
-type View = "accounts" | "devices" | "gacha";
+type View = "accounts" | "devices" | "gacha" | "reminders";
 type FollowFilter = "all" | "followed" | "unfollowed";
 type VisibilityFilter = "visible" | "all" | "hidden";
 type CardChange = { type: "follow"; followed: boolean } | { type: "move"; targetId: string } | { type: "visibility"; hidden: boolean };
 const pages = [
   { id: "accounts", title: "账号总览", Icon: LayoutGrid },
   { id: "gacha", title: "抽卡记录", Icon: Sparkles },
-  { id: "devices", title: "MuMu 实例", Icon: Monitor },
+  { id: "reminders", title: "到期提醒", Icon: Bell },
+  { id: "devices", title: "设备与工具", Icon: Monitor },
 ] as const;
 
 function Summary({ icon, label, count, tone }: { icon: ReactNode; label: string; count: number; tone: string }) {
@@ -48,6 +50,7 @@ function App() {
   const [removing, setRemoving] = useState<Account>();
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState("");
+  const reminders = useReminders();
   const displayed = accounts.filter(account =>
     (filter === "all" || account.role.game === filter) &&
     (followFilter === "all" || account.followed === (followFilter === "followed")) &&
@@ -139,12 +142,15 @@ function App() {
             setView(id);
           }}>
           <Icon size={19} />{title}
+          {id === "reminders" && reminders.expiring.length > 0 && <span className="nav-count"
+            aria-label={`${reminders.expiring.length} 项即将到期`}>{reminders.expiring.length}</span>}
         </button>)}
       </nav>
       <div className="sidebar-footer"><span className="indicator" />本地工作区</div>
     </aside>
     <main className="main">
-      {view === "devices" ? <Devices /> : view === "gacha" ? <Gacha accounts={accounts} target={gachaTarget} /> : <>
+      {view === "devices" ? <Devices /> : view === "gacha" ? <Gacha accounts={accounts} target={gachaTarget} /> :
+        view === "reminders" ? <RemindersPage data={reminders} /> : <>
         <header className="page-header">
           <div><h1>账号总览</h1><p className="muted">角色资料与每日状态</p></div>
           <div className="page-actions">
@@ -154,6 +160,7 @@ function App() {
             <button className="button primary" onClick={() => setEditing(null)} disabled={accountBusy}><Plus size={18} />添加账号</button>
           </div>
         </header>
+        <ReminderNotice entries={reminders.expiring} open={() => setView("reminders")} />
         {error && <div className="notice error" role="alert">{error}<button className="text-button" onClick={loadAccounts}>重新读取</button></div>}
         <div className="summaries">
           <Summary icon={<UsersRound size={20} />} label="账号" count={accounts.length} tone="violet" />

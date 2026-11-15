@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod accounts;
+mod automation_tools;
 mod battle_records;
 mod characters;
 mod community;
@@ -9,6 +10,7 @@ mod genshin_wishes;
 mod miyoushe_login;
 mod mumu;
 mod protected;
+mod reminders;
 mod starrail_warps;
 
 use tauri::Manager;
@@ -48,6 +50,9 @@ fn main() {
             miyoushe_login::cancel_miyoushe_login,
             mumu::list_mumu_instances,
             mumu::start_mumu_instance,
+            automation_tools::list_automation_tools,
+            automation_tools::launch_automation_tool,
+            reminders::fetch_reminders,
             gacha::list_gacha,
             gacha::import_gacha,
             gacha::sync_genshin_wishes,
