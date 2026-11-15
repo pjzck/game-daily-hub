@@ -18,6 +18,8 @@ fn main() {
         "start_mumu_instance",
         "list_automation_tools",
         "launch_automation_tool",
+        "choose_launch_path",
+        "reset_launch_path",
         "fetch_reminders",
         "list_gacha",
         "import_gacha",
