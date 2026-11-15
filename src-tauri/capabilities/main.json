@@ -22,6 +22,8 @@
     "allow-start-mumu-instance",
     "allow-list-automation-tools",
     "allow-launch-automation-tool",
+    "allow-choose-launch-path",
+    "allow-reset-launch-path",
     "allow-fetch-reminders",
     "allow-list-gacha",
     "allow-import-gacha",

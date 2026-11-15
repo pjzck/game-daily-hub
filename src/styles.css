@@ -274,8 +274,15 @@ tbody tr:last-child td { border-bottom: 0; }
 .automation-tool-list { list-style: none; margin: 0; padding: 2px 19px; }
 .automation-tool-list > li { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center; padding: 10px 0; }
 .automation-tool-list > li + li { border-top: 1px solid var(--border); }
-.automation-tool-actions { display: flex; align-items: center; gap: 8px; }
+.automation-tool-actions, .device-page-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
+.launcher-label, .automation-tool-list .table-device { min-width: 0; }
+.launcher-path { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mumu-launcher-path { margin: -14px 0 12px; }
 .automation-tool-note { grid-column: 1 / -1; max-width: none; margin-left: 45px; }
+@media (max-width: 850px) {
+  .automation-tool-list > li { grid-template-columns: minmax(0, 1fr); }
+  .automation-tool-actions { justify-content: flex-start; padding-left: 45px; }
+}
 .notice.warning, .notice.reminder-notice { color: #75490b; background: #fffaed; border-color: #f2dfa7; }
 .notice.reminder-notice { display: flex; align-items: center; gap: 10px; }
 .reminder-notice div { flex: 1; min-width: 0; }

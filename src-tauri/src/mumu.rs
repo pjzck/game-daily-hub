@@ -1,3 +1,4 @@
+use crate::automation_tools::{LaunchSettings, Tool};
 use serde::Serialize;
 use serde_json::Value;
 #[cfg(windows)]
@@ -8,6 +9,7 @@ use std::{
     sync::{LazyLock, Mutex},
     time::Duration,
 };
+use tauri::State;
 
 #[cfg(windows)]
 static STARTING_INSTANCES: LazyLock<Mutex<HashSet<u32>>> = LazyLock::new(Mutex::default);
@@ -54,21 +56,32 @@ pub struct Instance {
 }
 
 #[tauri::command]
-pub async fn list_mumu_instances() -> Result<Vec<Instance>, String> {
+pub async fn list_mumu_instances(
+    settings: State<'_, LaunchSettings>,
+) -> Result<Vec<Instance>, String> {
     #[cfg(windows)]
     {
-        resolve_installation().await.map(|(_, instances)| instances)
+        resolve_installation(settings.path(Tool::Mumu)?)
+            .await
+            .map(|(_, instances)| instances)
     }
     #[cfg(not(windows))]
-    Err("当前 MuMu 查询支持 Windows。".into())
+    {
+        let _ = settings;
+        Err("当前 MuMu 查询支持 Windows。".into())
+    }
 }
 
 #[tauri::command]
-pub async fn start_mumu_instance(index: u32, name: String) -> Result<Instance, String> {
+pub async fn start_mumu_instance(
+    index: u32,
+    name: String,
+    settings: State<'_, LaunchSettings>,
+) -> Result<Instance, String> {
     #[cfg(windows)]
     {
         let _start = StartingInstance::acquire(&STARTING_INSTANCES, index)?;
-        let (manager, instances) = resolve_installation().await?;
+        let (manager, instances) = resolve_installation(settings.path(Tool::Mumu)?).await?;
         let instance = find_instance(instances, index)?;
         if instance.name != name {
             return Err("MuMu 实例已变化，请刷新列表后重试。".into());
@@ -86,13 +99,20 @@ pub async fn start_mumu_instance(index: u32, name: String) -> Result<Instance, S
     }
     #[cfg(not(windows))]
     {
-        let _ = (index, name);
+        let _ = (index, name, settings);
         Err("当前 MuMu 启动支持 Windows。".into())
     }
 }
 
 #[cfg(windows)]
-async fn resolve_installation() -> Result<(PathBuf, Vec<Instance>), String> {
+async fn resolve_installation(manual: Option<PathBuf>) -> Result<(PathBuf, Vec<Instance>), String> {
+    if let Some(manager) = manual {
+        if !Tool::Mumu.valid_path(&manager) {
+            return Err("手动指定的 MuMu 管理程序已不可用，请重新选择或恢复自动检测。".into());
+        }
+        let instances = query(&manager).await?;
+        return Ok((manager, instances));
+    }
     let mut error =
         "未找到 MuMu 安装。可用 GAME_DAILY_HUB_MUMU_MANAGER 指定 MuMuManager.exe。".into();
     for manager in managers() {
@@ -113,7 +133,7 @@ fn find_instance(instances: Vec<Instance>, index: u32) -> Result<Instance, Strin
 }
 
 #[cfg(windows)]
-fn managers() -> Vec<PathBuf> {
+pub(crate) fn managers() -> Vec<PathBuf> {
     use winreg::{
         RegKey,
         enums::{
@@ -124,13 +144,7 @@ fn managers() -> Vec<PathBuf> {
     let mut candidates = Vec::new();
     if let Some(override_path) = std::env::var_os("GAME_DAILY_HUB_MUMU_MANAGER") {
         let path = PathBuf::from(override_path);
-        if path.is_absolute()
-            && path
-                .file_name()
-                .and_then(|value| value.to_str())
-                .is_some_and(|value| value.eq_ignore_ascii_case("MuMuManager.exe"))
-            && path.is_file()
-        {
+        if Tool::Mumu.valid_path(&path) {
             candidates.push(path);
         }
         return candidates;

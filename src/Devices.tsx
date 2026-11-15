@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Monitor, Play, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { EmptyState } from "./Accounts";
-import { AutomationTools } from "./AutomationTools";
+import { AutomationTools, LauncherPath, LauncherPathActions, useLaunchers } from "./AutomationTools";
 import { dateTime, errorMessage } from "./model";
 
 type Status = "running" | "starting" | "stopped" | "unknown" | "error";
@@ -29,23 +29,34 @@ export function Devices() {
   const [startErrors, setStartErrors] = useState<Record<number, string>>({});
   const [updated, setUpdated] = useState<number>();
   const [error, setError] = useState("");
+  const launchers = useLaunchers();
+  const manager = launchers.rows.find(row => row.tool === "mumu");
 
   async function readInstances() {
     setRows(await invoke<Instance[]>("list_mumu_instances"));
     setUpdated(Date.now());
   }
 
-  async function refresh() {
+  async function refresh(managerChanged = false) {
     setBusy(true);
     setError("");
+    if (managerChanged) {
+      setRows([]);
+      setUpdated(undefined);
+      setStartErrors({});
+    }
     try {
       await readInstances();
       setStartErrors({});
     } catch (reason) {
-      setError(errorMessage(reason) + (rows.length > 0 ? " 已保留上次列表。" : ""));
+      setError(errorMessage(reason) + (!managerChanged && rows.length > 0 ? " 已保留上次列表。" : ""));
     } finally {
       setBusy(false);
     }
+  }
+
+  async function configureManager(action: "choose" | "reset") {
+    if (await launchers.run("mumu", action)) await refresh(true);
   }
 
   function updateInstance(instance: Instance) {
@@ -83,10 +94,17 @@ export function Devices() {
   return <>
     <header className="page-header">
       <div><h1>MuMu 实例</h1><p className="muted">{updated ? "上次读取 " + dateTime.format(updated) : "本机模拟器"}</p></div>
-      <button className="button primary" onClick={refresh} disabled={busy || starting.size > 0}>
-        <RefreshCw size={17} className={busy ? "spin" : ""} />{busy ? "读取中…" : "刷新实例"}
-      </button>
+      <div className="device-page-actions">
+        <LauncherPathActions row={manager} disabled={busy || launchers.loading || !!launchers.pending.mumu || starting.size > 0}
+          onChoose={() => void configureManager("choose")} onReset={() => void configureManager("reset")} />
+        <button className="button primary" onClick={() => { void refresh(); void launchers.refresh(); }}
+          disabled={busy || launchers.loading || Object.values(launchers.pending).some(Boolean) || starting.size > 0}>
+          <RefreshCw size={17} className={busy ? "spin" : ""} />{busy ? "读取中…" : "自动检测实例"}
+        </button>
+      </div>
     </header>
+    <div className="mumu-launcher-path"><LauncherPath row={manager} /></div>
+    {launchers.issues.mumu && <div className="notice error" role="alert">{launchers.issues.mumu}</div>}
     {error && <div className="notice error" role="alert">{error}</div>}
     {rows.length > 0 ? <div className="panel table-panel">
       <div className="panel-title">
@@ -108,7 +126,7 @@ export function Devices() {
               {startError && <p className="small device-start-error" role="alert">{startError}</p>}
             </td>
             <td>{row.canStart && <button type="button" className="button secondary device-start"
-              disabled={busy || isStarting} aria-label={`启动「${row.name}」`}
+              disabled={busy || !!launchers.pending.mumu || isStarting} aria-label={`启动「${row.name}」`}
               onClick={() => void start(row)}>
               {isStarting ? <RefreshCw size={15} className="spin" /> : <Play size={15} />}
               启动
@@ -118,6 +136,6 @@ export function Devices() {
       </table>
     </div> : <EmptyState icon={<Monitor size={29} />}
       title={busy ? "正在读取实例" : error ? "暂时无法读取实例" : "没有找到实例"} />}
-    <AutomationTools />
+    <AutomationTools data={launchers} />
   </>;
 }

@@ -13,7 +13,8 @@
 - **同步祈愿**从已扫码的原神国服账号读取角色、武器、集录、常驻和新手祈愿。打开卡片的「祈愿记录」后点「同步祈愿」，当前可查记录会合并到该 UID 的本地档案。
 - **同步跃迁**支持 Windows 崩铁国服客户端。打开游戏里的「跃迁 → 历史记录」并等首页加载，再从账号卡片进入「跃迁记录」，点击「同步跃迁」。程序会自动分页查询，按 UID 与记录 ID 合并到本地档案。
 - **MuMu 实例**通过 Windows 安装信息发现管理程序，显示实例状态和 ADB 地址。点某一行的「启动」即可启动该实例，页面会在 Android 就绪后更新状态。
-- **辅助工具**在「设备与工具」页启动本机的 MAA 或 M9A。程序通过桌面或开始菜单快捷方式查找各工具的 GUI，可用 `GAME_DAILY_HUB_MAA_EXE` 和 `GAME_DAILY_HUB_M9A_EXE` 显式指定相应可执行文件的绝对路径。工具按自身配置运行。
+- **游戏与辅助工具**在「设备与工具」页启动原神、崩铁 PC 客户端或本机的 MAA、M9A。两款游戏优先从米哈游启动器的安装记录检测，更新仍通过原有启动器进行。辅助工具从桌面或开始菜单快捷方式查找，并按自身配置运行。
+- **手动添加启动路径**在「设备与工具」页选择对应的游戏或工具 EXE，路径只保存在本机，可随时更换或恢复自动检测。MuMu 手动选择的是 `MuMuManager.exe`，随后读取该管理程序的实例列表。
 - **到期提醒**显示原神、崩铁、重返未来：1999 和明日方舟国服已收录活动和卡池的截止时间。应用内会提醒 24 小时内到期的条目，启动时及运行期间每四小时刷新，也可手动刷新。来源为 [SRA 活动日历](https://starrailassistant.top/reference/public-api/)、[UIGF 祈愿数据](https://github.com/UIGF-org/CurrentBannerWatcher)、崩铁游戏公告、[TapTap 官方公告](https://www.taptap.cn/app/221062/topic?type=official)和[方舟国服游戏数据镜像](https://github.com/Kengxxiao/ArknightsGameData)。1999 按公告正文中可识别的时间收录。
 
 在「添加账号 → 米游社扫码」生成二维码，用米游社 App 扫码并在手机上确认。扫码会话可以读取米游社小组件的体力数据。同一游戏绑定多个角色时，程序按各角色的 UID 和区服请求便笺。若米游社要求安全验证或启用实时便笺，按官方 App 中的提示处理后再刷新。连接窗口也支持导入已有 Cookie，并选填同一会话的设备 ID 和设备指纹。
@@ -35,7 +36,7 @@ npm run tauri dev
 npm run tauri build
 ```
 
-可执行文件位于项目的 `src-tauri/target/release/game-daily-hub.exe`。可用 `GAME_DAILY_HUB_DATA_DIR` 指定独立的数据目录，或用 `GAME_DAILY_HUB_MUMU_MANAGER` 指定 MuMu 管理程序的绝对路径。
+可执行文件位于项目的 `src-tauri/target/release/game-daily-hub.exe`。可用 `GAME_DAILY_HUB_DATA_DIR` 指定独立的数据目录。启动路径也支持每个工具的环境变量 `GAME_DAILY_HUB_MUMU_MANAGER`、`GAME_DAILY_HUB_MAA_EXE`、`GAME_DAILY_HUB_M9A_EXE`、`GAME_DAILY_HUB_GENSHIN_EXE` 和 `GAME_DAILY_HUB_STARRAIL_EXE`。应用内手动选择的路径优先使用。
 
 ## 目标
 

@@ -29,6 +29,7 @@ fn main() {
                 None => app.path().app_local_data_dir()?,
             };
             app.manage(gacha::GachaStore::new(&directory));
+            app.manage(automation_tools::LaunchSettings::new(&directory));
             app.manage(miyoushe_login::QrLogin::default());
             app.manage(accounts::AccountStore::open(directory)?);
             Ok(())
@@ -52,6 +53,8 @@ fn main() {
             mumu::start_mumu_instance,
             automation_tools::list_automation_tools,
             automation_tools::launch_automation_tool,
+            automation_tools::choose_launch_path,
+            automation_tools::reset_launch_path,
             reminders::fetch_reminders,
             gacha::list_gacha,
             gacha::import_gacha,
